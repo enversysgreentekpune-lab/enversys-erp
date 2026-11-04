@@ -1,0 +1,49 @@
+{
+  "name": "enversys-erp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Enversys business lifecycle ERP — CRM, proposals, work orders, Markal factory, HR & MD dashboard",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:reset": "tsx scripts/migrate.ts --reset && tsx scripts/seed.ts",
+    "templates:build": "tsx scripts/build-templates.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
+    "docx": "^9.15.2",
+    "docxtemplater": "^3.71.1",
+    "exceljs": "^4.4.0",
+    "jose": "^6.2.15",
+    "lucide-react": "^1.68.0",
+    "next": "^16.4.5",
+    "nodemailer": "^10.3.1",
+    "pg": "^8.23.1",
+    "pizzip": "^3.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "recharts": "^3.10.1",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.4",
+    "@types/node": "^26.6.6",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "dotenv": "^18.0.9",
+    "postcss": "^8.5.32",
+    "tailwindcss": "^4.3.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

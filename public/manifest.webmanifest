@@ -1,0 +1,5 @@
+{
+  "name": "Enversys Business Suite", "short_name": "Enversys", "start_url": "/", "display": "standalone",
+  "background_color": "#ffffff", "theme_color": "#0b5394",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
