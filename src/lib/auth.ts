@@ -44,7 +44,7 @@ export async function requestOtp(mobileRaw: string): Promise<{ ok: boolean; mess
   await pool.query(`insert into otp_request(mobile, code_hash, expires_at, ip) values ($1,$2, now() + ($3 || ' minutes')::interval, $4)`,
     [mobile, hmac(`${mobile}:${code}`), String(OTP_TTL_MIN), ip]);
   await sendOtpSms(mobile, code);
-  const dev = (process.env.OTP_PROVIDER ?? "console") === "console" && process.env.NODE_ENV !== "production";
+  const dev = (process.env.OTP_PROVIDER ?? "console") === "console" && (process.env.NODE_ENV !== "production" || process.env.DEMO_MODE === "true");
   return { ok: true, message: `OTP sent to +91 ${mobile.slice(0, 2)}xxxxxx${mobile.slice(-2)}`, devCode: dev ? code : undefined };
 }
 

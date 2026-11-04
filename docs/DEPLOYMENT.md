@@ -22,6 +22,11 @@ Production-mode locally: `npm run build && npm start` (the OTP is then only prin
 7. **Website form & inbound mail**: configure both webhooks (see API.md).
 8. **Templates**: replace the default Word/Excel templates with letterhead versions in Admin → Templates.
 
+## One-click on Render (demo)
+The repo has a `render.yaml` blueprint. In Render choose **New → Blueprint**, then pick this repository and click **Apply**. It creates a PostgreSQL database and the web service, generates the secrets, runs migrations, seeds the demo data on first start (the seed is skipped if data already exists) and turns on `DEMO_MODE` (the OTP is shown on the login screen).
+- Free-tier limits: the web service sleeps after about 15 minutes idle (first load then takes about a minute), the free database expires after 30 days, and uploaded/generated files are lost when the service restarts. Quote templates fall back to the bundled defaults in `templates/`.
+- Before real use: switch to paid plans, add a persistent disk (mounted at `storage/`) or S3, set `DEMO_MODE=false`, configure `OTP_PROVIDER=msg91` and SMTP, and replace the demo data with real users.
+
 ## Hosting options
 - **Vercel + Supabase**: works for the app, but local-disk storage is not persistent on Vercel. Use the S3/Supabase Storage driver first.
 - **Single VM / container (simplest)**: `npm ci && npm run build && npm start` behind nginx, with Postgres managed separately and a mounted volume for `storage/`.

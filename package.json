@@ -2,7 +2,7 @@
   "name": "enversys-erp",
   "version": "0.1.0",
   "private": true,
-  "description": "Enversys business lifecycle ERP — CRM, proposals, work orders, Markal factory, HR & MD dashboard",
+  "description": "Enversys business lifecycle ERP \u2014 CRM, proposals, work orders, Markal factory, HR & MD dashboard",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,7 +12,8 @@
     "db:reset": "tsx scripts/migrate.ts --reset && tsx scripts/seed.ts",
     "templates:build": "tsx scripts/build-templates.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "start:hosted": "tsx scripts/migrate.ts && tsx scripts/seed.ts && next start"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -30,7 +31,9 @@
     "react-dom": "^19.3.1",
     "recharts": "^3.10.1",
     "server-only": "^0.0.1",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "tsx": "^4.23.15",
+    "dotenv": "^18.0.9"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.4",
@@ -39,11 +42,12 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "dotenv": "^18.0.9",
     "postcss": "^8.5.32",
     "tailwindcss": "^4.3.4",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

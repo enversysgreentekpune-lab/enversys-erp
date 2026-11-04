@@ -1,0 +1,39 @@
+# Render Blueprint: one-click deploy of the Enversys app + PostgreSQL.
+# Render dashboard -> New -> Blueprint -> pick this repository.
+databases:
+  - name: enversys-db
+    plan: free
+    databaseName: enversys
+    user: enversys
+
+services:
+  - type: web
+    name: enversys-erp
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci --include=dev && npm run build
+    # migrations are idempotent; seed only runs on an empty database
+    startCommand: npm run start:hosted
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: enversys-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: INBOUND_WEBHOOK_SECRET
+        generateValue: true
+      - key: WEBSITE_LEAD_SECRET
+        generateValue: true
+      # Demo: OTP is shown on the login screen. Set to "false" and configure
+      # OTP_PROVIDER=msg91 (+ MSG91_* keys) before real use.
+      - key: DEMO_MODE
+        value: "true"
+      - key: OTP_PROVIDER
+        value: console
+      - key: STORAGE_DIR
+        value: ./storage

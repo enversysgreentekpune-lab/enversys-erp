@@ -5,7 +5,7 @@ import LoginForm from "./LoginForm";
 export const metadata = { title: "Login" };
 export default async function LoginPage() {
   if (await getCurrentUser()) redirect("/");
-  const dev = (process.env.OTP_PROVIDER ?? "console") === "console" && process.env.NODE_ENV !== "production";
+  const dev = (process.env.OTP_PROVIDER ?? "console") === "console" && (process.env.NODE_ENV !== "production" || process.env.DEMO_MODE === "true");
   return (
     <div className="grid min-h-dvh lg:grid-cols-2">
       <div className="hidden flex-col justify-between bg-brand-600 p-10 text-white lg:flex">

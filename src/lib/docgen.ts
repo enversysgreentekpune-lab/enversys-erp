@@ -47,9 +47,16 @@ export async function renderXlsx(tpl: Buffer, data: Record<string, any>): Promis
 
 export async function loadTemplate(code: string, db: Db = pool): Promise<Buffer> {
   const t = await one(`select storage_key from template where code=$1 and is_active order by version desc limit 1`, [code], db);
-  if (!t?.storage_key) throw new Error(`Template ${code} not configured`);
-  return getFile(t.storage_key);
+  if (t?.storage_key) {
+    try { return await getFile(t.storage_key); } catch { /* file lost (ephemeral disk) -> fall back to bundled default */ }
+  }
+  const bundled = BUNDLED_TEMPLATES[code];
+  if (!bundled) throw new Error(`Template ${code} not configured`);
+  const fs = await import("node:fs/promises");
+  const path = await import("node:path");
+  return fs.readFile(path.join(/*turbopackIgnore: true*/ process.cwd(), "templates", bundled));
 }
+const BUNDLED_TEMPLATES: Record<string, string> = { QUOTE_DOCX: "quote_offer.docx", QUOTE_XLSX: "price_schedule.xlsx", WO_ACCEPTANCE_DOCX: "wo_acceptance.docx" };
 
 // Indian numbering in words (for quotes / invoices)
 const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
