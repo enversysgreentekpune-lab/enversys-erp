@@ -1,7 +1,7 @@
 "use client";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell, LineChart, Line, ComposedChart, Area } from "recharts";
 
-const COLORS = ["#0b5394", "#2a9d8f", "#e9a23b", "#e76f51", "#8e7cc3", "#5fa8d3", "#90be6d", "#f4a261", "#6c757d"];
+const COLORS = ["#15803d", "#0d3e8c", "#06243c", "#86c49a", "#7ea3d6", "#94a3b8", "#c7a24a", "#b45f5f", "#475569"];
 const fmt = (v: number) => (Math.abs(v) >= 1e7 ? `${(v / 1e7).toFixed(2)} Cr` : Math.abs(v) >= 1e5 ? `${(v / 1e5).toFixed(1)} L` : Math.round(v).toLocaleString("en-IN"));
 const tip = { contentStyle: { borderRadius: 8, fontSize: 12 }, formatter: (v: any) => (typeof v === "number" ? fmt(v) : v) };
 
@@ -9,7 +9,7 @@ export function Bars({ data, x, bars, height = 240, stacked, horizontal, money =
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} layout={horizontal ? "vertical" : "horizontal"} margin={{ left: horizontal ? 10 : 0, right: 10, top: 5, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" />
         {horizontal ? <><XAxis type="number" tickFormatter={money ? fmt : undefined} fontSize={11} /><YAxis type="category" dataKey={x} width={110} fontSize={11} /></>
           : <><XAxis dataKey={x} fontSize={11} /><YAxis tickFormatter={money ? fmt : undefined} fontSize={11} width={55} /></>}
         <Tooltip {...tip} formatter={(v: any) => (money ? fmt(Number(v)) : v)} />
@@ -38,7 +38,7 @@ export function Trend({ data, x, lines, bars = [], height = 260 }: { data: any[]
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={data} margin={{ left: 0, right: 10, top: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" />
         <XAxis dataKey={x} fontSize={11} /><YAxis tickFormatter={fmt} fontSize={11} width={55} />
         <Tooltip {...tip} /><Legend wrapperStyle={{ fontSize: 12 }} />
         {bars.map((b, i) => <Bar key={b.key} dataKey={b.key} name={b.label} fill={b.color ?? COLORS[i + 3]} stackId="s" />)}

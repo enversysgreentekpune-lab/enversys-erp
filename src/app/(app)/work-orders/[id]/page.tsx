@@ -8,6 +8,7 @@ import { ActionForm } from "@/components/ActionForm";
 import { Bars } from "@/components/charts";
 import { assignTeamAction, progressAction, addCostAction, milestoneAction, uploadWoDocsAction } from "@/app/actions/wo";
 import { DOSSIER_FOLDERS } from "@/lib/attachments";
+import { uploadPoCopyAction } from "@/app/actions/ops";
 import { COST_CATEGORIES } from "@/lib/costing";
 
 export default async function WoDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
@@ -18,7 +19,7 @@ export default async function WoDetail({ params, searchParams }: { params: Promi
   const showCost = !!can(u, "costing", "view") || !!can(u, "finance", "view");
   const edit = !!can(u, "work_orders", "edit");
   const showMoney = showCost || edit; // billing figures hidden from shop-floor / technician roles
-  const [w, cust, cpo, team, budget, actual, spec, ms, prs, pos, costs, docs, hours, emps, acts, invs] = await Promise.all([
+  const [w, cust, cpo, team, budget, actual, spec, ms, prs, pos, costs, docs, hours, emps, acts, invs, jobs] = await Promise.all([
     one(`select p.*, v.name vertical from v_wo_pnl p join vertical v on v.id=p.vertical_id where p.id=$1`, [id]),
     one(`select c.* from customer c join work_order w on w.customer_id=c.id where w.id=$1`, [id]),
     one(`select cp.*, pr.proposal_no, pr.id pid from customer_po cp left join proposal pr on pr.id=cp.proposal_id join work_order w on w.customer_po_id=cp.id where w.id=$1`, [id]),
@@ -35,14 +36,15 @@ export default async function WoDetail({ params, searchParams }: { params: Promi
     q(`select e.id, e.name, r.code role from employee e join role r on r.id=e.role_id where e.is_active order by e.name`),
     q(`select * from audit_log where (entity='work_order' and entity_id=$1) order by at desc limit 30`, [id]),
     q(`select i.*, coalesce((select sum(amount) from receipt r where r.invoice_id=i.id),0) received from invoice i where wo_id=$1 order by invoice_date`, [id]),
+    q(`select j.*, e.name supervisor from job_order j left join employee e on e.id=j.supervisor_id where j.wo_id=$1 order by j.project_item_code`, [id]),
   ]);
   const cats = [...new Set([...budget.map((b) => b.category), ...actual.map((a) => a.category)])];
   const bva = cats.map((c) => ({ c: label(c), budget: Number(budget.find((b) => b.category === c)?.amount ?? 0), actual: Number(actual.find((a) => a.category === c)?.actual ?? 0), committed: Number(actual.find((a) => a.category === c)?.committed ?? 0) }));
   const pm = team.find((t) => t.team_role === "PM");
-  const tabs = [{ key: "overview", label: "Overview & P&L" }, { key: "team", label: "Team" }, { key: "scope", label: `Scope / BOM (${spec.length})` }, { key: "purchase", label: `Purchase (${pos.length})` }, ...(showCost ? [{ key: "costs", label: `Cost ledger (${costs.length})` }] : []), { key: "docs", label: `Dossier (${docs.length})` }, { key: "history", label: "History" }];
+  const tabs = [{ key: "overview", label: "Overview & P&L" }, { key: "team", label: "Team" }, { key: "scope", label: `Scope / BOM (${spec.length})` }, { key: "purchase", label: `Purchase (${pos.length})` }, ...(jobs.length ? [{ key: "jobs", label: `Manufacturing jobs (${jobs.length})` }] : []), ...(showCost ? [{ key: "costs", label: `Cost ledger (${costs.length})` }] : []), { key: "docs", label: `Dossier (${docs.length})` }, { key: "history", label: "History" }];
   return (
     <div>
-      <PageHeader back={{ href: "/work-orders", label: "Work orders" }} title={<>{w.wo_no} <span className="text-base font-normal text-slate-500">{label(w.wo_type)}</span></>}
+      <PageHeader back={{ href: w.order_kind === "SO" ? "/so" : "/work-orders", label: w.order_kind === "SO" ? "Service orders" : "Projects" }} title={<><span className="mr-2 align-middle text-xs font-semibold uppercase tracking-wider text-slate-400">Project code</span>{w.wo_no} <span className="text-base font-normal text-slate-500">{label(w.wo_type)} · {w.order_kind}</span></>}
         subtitle={<span className="flex flex-wrap items-center gap-2">{w.title} · <Link className="link" href={`/customers/${cust.id}`}>{cust.name}</Link> · {w.vertical} · <Badge status={w.status} /> {w.has_fabrication && <Badge tone="purple">Markal fabrication</Badge>} Schedule <Badge status={w.schedule_rag} /> Cost <Badge status={w.cost_rag} /></span>}
         actions={<a className="btn-secondary" href={`/api/dossier/${id}`}>⬇ Download job dossier</a>} />
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
@@ -75,6 +77,10 @@ export default async function WoDetail({ params, searchParams }: { params: Promi
               <div className="flex justify-between"><dt className="text-slate-500">Start → completion</dt><dd>{dt(w.start_date)} → {dt(w.end_date)}</dd></div>
             </dl>
             {cpo?.agreed_changes && <p className="mt-2 rounded bg-amber-50 p-2 text-xs dark:bg-amber-900/20">Agreed changes: {cpo.agreed_changes}</p>}
+            <div className="mt-3 border-t border-slate-100 pt-3 text-sm dark:border-slate-800">
+              {cpo?.attachment_id ? <a className="link" href={`/api/files/${cpo.attachment_id}`}>📎 Customer {w.order_kind} copy</a> : <span className="text-amber-700">Customer {w.order_kind} copy not uploaded</span>}
+              {edit && <ActionForm action={uploadPoCopyAction} submitLabel={cpo?.attachment_id ? "Replace copy" : "Upload PO / SO copy"} submitClass="btn-secondary btn-sm" className="mt-2"><input type="hidden" name="wo_id" value={id} /><input type="file" name="po_file" accept="image/*,application/pdf" className="text-xs" /></ActionForm>}
+            </div>
           </Card>
           {showMoney && <><Card title="Billing milestones" className="lg:col-span-2" bodyClass="p-0">
             <Table head={["Milestone", "%", "Amount", "Due", "Status", ""]}>
@@ -109,8 +115,8 @@ export default async function WoDetail({ params, searchParams }: { params: Promi
       )}
       {tab === "scope" && (
         <Card title="Final material specification (frozen from won proposal)" bodyClass="p-0">
-          <Table head={["#", "Item", "Description", "Specification", "Make / MOC", "Qty", "UOM", "Dwg", "Route", ...(showCost ? ["Budget unit cost"] : [])]}>
-            {spec.map((s) => <tr key={s.id}><td>{s.sl}</td><td className="text-xs">{s.item_code}</td><td>{s.description}</td><td className="max-w-xs text-xs">{s.specification}</td><td className="text-xs">{[s.make, s.moc].filter(Boolean).join(" / ")}</td><td className="num">{num(s.qty, 2)}</td><td>{s.uom}</td><td className="text-xs">{s.drawing_ref}</td><td>{s.is_fabricated ? <Badge tone="purple">Markal</Badge> : <Badge>Vendor</Badge>}</td>{showCost && <td className="num">{inr(s.unit_cost)}</td>}</tr>)}
+          <Table head={["#", "Project item code", "Item", "Description", "Specification", "Make / MOC", "Qty", "UOM", "Dwg", "Route", ...(showCost ? ["Budget unit cost"] : [])]}>
+            {spec.map((s) => <tr key={s.id}><td>{s.sl}</td><td className="font-mono text-xs">{s.project_item_code}</td><td className="text-xs">{s.item_code}</td><td>{s.description}</td><td className="max-w-xs text-xs">{s.specification}</td><td className="text-xs">{[s.make, s.moc].filter(Boolean).join(" / ")}</td><td className="num">{num(s.qty, 2)}</td><td>{s.uom}</td><td className="text-xs">{s.drawing_ref}</td><td>{s.is_fabricated ? <Badge tone="purple">Markal</Badge> : <Badge>Vendor</Badge>}</td>{showCost && <td className="num">{inr(s.unit_cost)}</td>}</tr>)}
           </Table>
           {w.has_fabrication && <p className="p-3 text-xs text-slate-500">Lines routed to Markal will generate a fabrication & assembly job order (drawings, BOM, QAP/ITP, routing) when the Manufacturing module goes live in Phase 2. The Factory Manager has a kick-off task now.</p>}
         </Card>
@@ -171,6 +177,13 @@ export default async function WoDetail({ params, searchParams }: { params: Promi
             <a className="btn-primary mt-4 w-full" href={`/api/dossier/${id}`}>⬇ Download complete dossier (ZIP)</a>
           </Card>
         </div>
+      )}
+      {tab === "jobs" && (
+        <Card title="Markal manufacturing jobs" bodyClass="p-0" actions={<Link className="link text-xs" href="/manufacturing">Manufacturing dashboard →</Link>}>
+          <Table head={["Job", "Project item code", "Category", "Item", "Qty", "Weight", "Stage", "Progress", "Status"]}>
+            {jobs.map((j) => <tr key={j.id}><td className="font-medium">{j.job_no}</td><td className="font-mono text-xs">{j.project_item_code}</td><td>{label(j.category)}</td><td>{j.title}</td><td className="num">{num(j.qty)} {j.uom}</td><td className="num">{num(j.weight_kg / 1000, 2)} t</td><td>{label(j.stage)}</td><td className="w-28"><Progress value={Number(j.pct)} /></td><td><Badge status={j.status} /></td></tr>)}
+          </Table>
+        </Card>
       )}
       {tab === "history" && <Card bodyClass="p-0"><Table head={["When", "Action", "Details"]}>{acts.map((a) => <tr key={a.id}><td>{dtm(a.at)}</td><td>{a.action}</td><td className="text-xs"><code>{JSON.stringify(a.new_value)}</code></td></tr>)}</Table></Card>}
     </div>

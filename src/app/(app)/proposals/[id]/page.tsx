@@ -10,6 +10,9 @@ import { RevisionEditor } from "./RevisionEditor";
 import { StatusForm } from "./StatusForm";
 import { newRevisionAction, submitApprovalAction, generateDocsAction, markWonAction, importSpecAction } from "@/app/actions/proposals";
 import { decideApprovalAction } from "@/app/actions/approvals";
+import { siteVisitAction, assignProposalAction } from "@/app/actions/ops";
+import { GeoFields } from "@/components/GeoFields";
+import { Stepper } from "@/components/ui";
 import { LOST_REASONS, WO_TYPES, canApproveAs } from "@/lib/workflow";
 import { DEFAULT_PARAMS } from "@/lib/costing";
 import { fill } from "@/lib/email";
@@ -34,7 +37,7 @@ export default async function ProposalPage({ params, searchParams }: { params: P
     q(`select code, name, subject, body from template where kind='email' and is_active`),
     q(`select e.id, e.name from employee e join role r on r.id=e.role_id where r.code in ('PROJECT_MANAGER','OM_MANAGER','FACTORY_MANAGER') and e.is_active order by e.name`),
     q(`select e.id, e.name, r.name role from employee e join role r on r.id=e.role_id where r.code in ('SITE_ENGINEER','PRODUCTION_SUPERVISOR','IC_ENGINEER','OM_TECHNICIAN','QA_INSPECTOR') and e.is_active order by e.name`),
-    one(`select id, wo_no from work_order where proposal_id=$1`, [id]),
+    one(`select w.id, w.wo_no, cp.attachment_id po_copy from work_order w left join customer_po cp on cp.id=w.customer_po_id where w.proposal_id=$1`, [id]),
   ]);
   const edit = !!can(u, "leads", "edit") && !rev.locked && ["DRAFT", "IN_DISCUSSION", "IN_NEGOTIATION", "ON_HOLD"].includes(p.status);
   const t = rev.totals ?? {};
@@ -45,9 +48,16 @@ export default async function ProposalPage({ params, searchParams }: { params: P
   const latestGen = ["QUOTE_DOCX", "QUOTE_XLSX"].map((c) => docs.find((d) => d.doc_type === c && d.file_name.includes(`-R${p.current_rev} `))).filter(Boolean).map((d) => d!.id);
   const canWin = ["SUBMITTED", "IN_DISCUSSION", "IN_NEGOTIATION", "APPROVED", "ON_HOLD"].includes(p.status) && !!can(u, "leads", "approve");
   const statusOpts: Record<string, string[]> = { APPROVED: ["SUBMITTED", "CANCELLED"], SUBMITTED: ["IN_DISCUSSION", "IN_NEGOTIATION", "LOST", "ON_HOLD"], IN_DISCUSSION: ["IN_NEGOTIATION", "LOST", "ON_HOLD"], IN_NEGOTIATION: ["IN_DISCUSSION", "LOST", "ON_HOLD"], ON_HOLD: ["IN_DISCUSSION", "IN_NEGOTIATION", "LOST", "CANCELLED"], DRAFT: ["CANCELLED"] };
+  const [visits, owners, hasCost] = await Promise.all([
+    q(`select v.*, e.name by_name, (select json_agg(json_build_object('id', a.id, 'name', a.file_name, 'mime', a.mime)) from attachment a where a.entity='site_visit' and a.entity_id=v.id) files
+       from site_visit_report v left join employee e on e.id=v.visited_by where v.proposal_id=$1 order by v.visit_date desc`, [id]),
+    q(`select e.id, e.name from employee e join role r on r.id=e.role_id where r.code in ('SALES_ENGINEER','SALES_MANAGER','ESTIMATION_ENGINEER','BUSINESS_HEAD','MD') and e.is_active order by e.name`),
+    one(`select count(*)::int n from cost_line c join proposal_revision r on r.id=c.revision_id where r.proposal_id=$1`, [id]),
+  ]);
+  const ownerName = owners.find((o) => o.id === p.owner_id)?.name;
   const tabs = [
     { key: "spec", label: `Material spec (${spec.length})` }, ...(showCost ? [{ key: "cost", label: "Cost sheet" }] : []), { key: "terms", label: "Commercial terms" },
-    { key: "docs", label: `Documents (${docs.length})` }, { key: "send", label: "Send to customer" }, { key: "revisions", label: `Revisions (${revs.length})` }, { key: "approvals", label: "Approvals" },
+    { key: "docs", label: `Documents (${docs.length})` }, { key: "send", label: "Send to customer" }, { key: "site", label: `Site visit (${visits.length})` }, { key: "revisions", label: `Revisions (${revs.length})` }, { key: "approvals", label: "Approvals & assignment" },
     ...(canWin ? [{ key: "won", label: "✓ Mark as Won" }] : []),
   ];
   return (
@@ -62,6 +72,16 @@ export default async function ProposalPage({ params, searchParams }: { params: P
             <Link href="/approvals" className="btn-secondary">Reject…</Link></>}
         </>} />
 
+      <Stepper steps={[
+        { label: "Cost sheet", done: (hasCost?.n ?? 0) > 0 },
+        { label: "Proposal submission", done: !!p.submitted_at, note: p.submitted_at ? dt(p.submitted_at) : undefined },
+        { label: "Site visit report", done: visits.length > 0, optional: true },
+        { label: "Revision", done: p.current_rev > 0, note: `R${p.current_rev}`, optional: true },
+        { label: "PO / WO win", done: p.status === "WON" },
+        { label: "PO / SO copy upload", done: !!wo?.po_copy },
+        { label: "Project code created", done: !!wo, note: wo?.wo_no },
+      ]} />
+      <p className="-mt-2 mb-4 text-xs text-slate-500">Assigned to <b>{ownerName ?? "—"}</b>. Only the Director, the creator and the assigned person can see this proposal.</p>
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div className="card p-3"><div className="text-[11px] uppercase text-slate-500">Net (excl. GST)</div><div className="font-semibold">{inr(t.netSelling)}</div></div>
         <div className="card p-3"><div className="text-[11px] uppercase text-slate-500">Grand total</div><div className="font-semibold">{inr(t.grandTotal)}</div></div>
@@ -113,6 +133,41 @@ export default async function ProposalPage({ params, searchParams }: { params: P
         ) : <Card><Empty>The offer can be sent after internal approval.</Empty></Card>
       )}
       {tab === "revisions" && <Revisions revs={revs} id={id} a={sp.a} b={sp.b} showCost={showCost} />}
+      {tab === "site" && (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <Card title="Site visit reports" bodyClass="p-0">
+            {visits.length ? <ul className="divide-y divide-slate-100 dark:divide-slate-800">{visits.map((v) => (
+              <li key={v.id} className="p-4 text-sm">
+                <div className="flex flex-wrap justify-between gap-2"><b>{dt(v.visit_date)} · {v.site_location ?? "Site"}</b><span className="text-xs text-slate-500">by {v.by_name}{v.contact_person && ` · met ${v.contact_person}`}{v.lat && <> · <a className="link" target="_blank" rel="noreferrer" href={`https://www.google.com/maps?q=${v.lat},${v.lng}`}>📍 map</a></>}</span></div>
+                <p className="mt-1 whitespace-pre-wrap">{v.observations}</p>
+                {v.recommendations && <p className="mt-1 text-slate-600 dark:text-slate-300"><b>Recommendations:</b> {v.recommendations}</p>}
+                {v.files?.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{v.files.map((f: any) => f.mime?.startsWith("image/")
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <a key={f.id} href={`/api/files/${f.id}`} target="_blank"><img src={`/api/files/${f.id}`} alt={f.name} className="h-20 w-28 rounded border border-slate-200 object-cover" /></a>
+                  : <a key={f.id} className="link text-xs" href={`/api/files/${f.id}`}>{f.name}</a>)}</div>}
+              </li>))}</ul> : <Empty>No site visit yet. Add one if the scope needs a site survey.</Empty>}
+          </Card>
+          {can(u, "leads", "edit") && (
+            <Card title="Add site visit report">
+              <ActionForm action={siteVisitAction} reset submitLabel="Save report" className="space-y-2">
+                <input type="hidden" name="proposal_id" value={id} />
+                <div className="grid grid-cols-2 gap-2"><input type="date" name="visit_date" required className="input" /><input name="contact" placeholder="Person met" className="input" /></div>
+                <input name="location" placeholder="Site / location" className="input" defaultValue={lead.site_location ?? ""} />
+                <textarea name="observations" required placeholder="Observations: existing system, flows, space, power, access…" className="input min-h-24" />
+                <textarea name="recommendations" placeholder="Recommendations / scope changes" className="input" />
+                <div><span className="label">Photos & evidence</span><input type="file" name="evidence" multiple accept="image/*,application/pdf" className="text-sm" /></div>
+                <GeoFields />
+              </ActionForm>
+            </Card>
+          )}
+        </div>
+      )}
+      {tab === "approvals" && (can(u, "leads", "view") === "company" || p.created_by === u.id) && (
+        <Card title="Assign proposal" className="mb-4 max-w-xl">
+          <ActionForm action={assignProposalAction} submitLabel="Assign" className="flex gap-2"><input type="hidden" name="id" value={id} />
+            <select name="owner_id" defaultValue={p.owner_id ?? ""} className="input">{owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></ActionForm>
+        </Card>
+      )}
       {tab === "approvals" && (
         <Card bodyClass="p-0">
           {approvals.length ? <Table head={["Requested", "By", "Approver role", "Discount", "Status", "Decided by", "Remarks"]}>{approvals.map((a) => <tr key={a.id}><td>{dtm(a.created_at)}</td><td>{a.req}</td><td>{label(a.approver_role)}</td><td>{a.value}%</td><td><Badge status={a.status} /></td><td>{a.dec ?? "—"} {a.decided_at && <span className="text-xs text-slate-500">{dtm(a.decided_at)}</span>}</td><td>{a.remarks}</td></tr>)}</Table> : <Empty>No approval requests yet</Empty>}

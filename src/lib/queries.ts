@@ -200,3 +200,46 @@ export async function topOpportunities(f: Filters = {}) {
   return q(`select l.id, l.enquiry_no, l.title, l.est_value, l.stage, l.expected_closure, c.name customer, e.name owner from lead l
     join customer c on c.id=l.customer_id left join employee e on e.id=l.assigned_to where l.stage = any($1) ${lf} order by l.est_value desc limit 10`, p);
 }
+
+/** Directors dashboard: the six KPI lines */
+export async function directorLines(r: Range, fyFrom: string, f: Filters = {}) {
+  const v = f.verticalId ?? null;
+  const [l1, l2, l3, l4, l5, l6] = await Promise.all([
+    one(`select
+        (select count(distinct c.id)::int from customer c where ($3::uuid is null or c.vertical_id=$3 or exists (select 1 from lead l where l.customer_id=c.id and l.vertical_id=$3))
+           and (exists (select 1 from lead l where l.customer_id=c.id and l.stage = any($4) ) or exists (select 1 from work_order w where w.customer_id=c.id and w.status not in ('CLOSED','CANCELLED')))) active_customers,
+        (select count(*)::int from lead l where l.stage = any($4) and ($3::uuid is null or l.vertical_id=$3)) active_leads,
+        (select count(*)::int from lead l where l.stage='WON' and l.stage_changed_at::date between $1 and $2 and ($3::uuid is null or l.vertical_id=$3)) won_leads,
+        (select coalesce(sum(contract_value),0) from work_order w where w.created_at::date between $1 and $2 and ($3::uuid is null or w.vertical_id=$3)) won_amount,
+        (select coalesce(sum(contract_value),0) from work_order w where w.created_at::date between $5 and current_date and ($3::uuid is null or w.vertical_id=$3)) won_ytd`,
+      [r.from, r.to, v, OPEN_STAGES, fyFrom]),
+    one(`select count(*) filter (where order_kind='PO')::int po_total, count(*) filter (where order_kind='PO' and status in ('COMPLETED','CLOSED'))::int po_done,
+        count(*) filter (where order_kind='PO' and status not in ('COMPLETED','CLOSED','CANCELLED'))::int po_ongoing,
+        count(*) filter (where order_kind='SO')::int so_total, count(*) filter (where order_kind='SO' and status in ('COMPLETED','CLOSED'))::int so_done,
+        count(*) filter (where order_kind='SO' and status not in ('COMPLETED','CLOSED','CANCELLED'))::int so_ongoing,
+        coalesce(sum(contract_value) filter (where order_kind='PO'),0) po_value, coalesce(sum(contract_value) filter (where order_kind='SO'),0) so_value
+      from work_order where status<>'CANCELLED' and ($1::uuid is null or vertical_id=$1)`, [v]),
+    one(`select
+        (select coalesce(sum(po.total),0) from purchase_order po join work_order w on w.id=po.wo_id where po.status not in ('DRAFT','PENDING_APPROVAL','CANCELLED') and po.po_date between $1 and $2 and ($3::uuid is null or w.vertical_id=$3)) raised,
+        (select count(*)::int from purchase_order po join work_order w on w.id=po.wo_id where po.status not in ('DRAFT','PENDING_APPROVAL','CANCELLED') and po.po_date between $1 and $2 and ($3::uuid is null or w.vertical_id=$3)) raised_n,
+        (select coalesce(sum(p.amount),0) from vendor_payment p join vendor_bill b on b.id=p.bill_id left join work_order w on w.id=b.wo_id where p.pay_date between $1 and $2 and ($3::uuid is null or w.vertical_id=$3)) paid,
+        (select coalesce(sum(b.total - coalesce((select sum(amount) from vendor_payment p where p.bill_id=b.id),0)),0) from vendor_bill b left join work_order w on w.id=b.wo_id where ($3::uuid is null or w.vertical_id=$3)) due,
+        (select count(*)::int from purchase_order po join work_order w on w.id=po.wo_id where po.status in ('APPROVED','SENT','PARTIAL') and po.delivery_date < current_date and ($3::uuid is null or w.vertical_id=$3)) delayed`,
+      [r.from, r.to, v]),
+    one(`select (select count(*)::int from employee where is_active) total,
+        (select count(*)::int from attendance a join employee e on e.id=a.employee_id where e.is_active and a.att_date=current_date and a.status in ('P','HD','OD')) present,
+        (select coalesce(sum(amount),0) from cost_entry where source_type='EXPENSE_CLAIM' and status='POSTED' and entry_date >= date_trunc('month', current_date)) emp_exp_month,
+        (select coalesce(sum(amount),0) from cost_entry where cost_centre in ('OFFICE_ADMIN','FACTORY_ADMIN') and status='POSTED' and entry_date between $1 and $2) admin,
+        (select coalesce(sum(amount),0) from cost_entry where cost_centre='OFFICE_ADMIN' and status='POSTED' and entry_date between $1 and $2) office,
+        (select coalesce(sum(amount),0) from cost_entry where cost_centre='FACTORY_ADMIN' and status='POSTED' and entry_date between $1 and $2) factory`, [r.from, r.to]),
+    one(`select coalesce(sum(j.budget_cost),0) budget, count(*)::int jobs,
+        (select coalesce(sum(ce.amount),0) from cost_entry ce join job_order jj on jj.id=ce.job_id where ce.source_type='MATERIAL_ISSUE' and ce.expense_head in ('MS_SHEET','SS_SHEET','MS_STRUCTURE','BOUGHT_OUT','ELECTRICAL','FASTENER','OTHER')) material,
+        (select coalesce(sum(ce.amount),0) from cost_entry ce where ce.job_id is not null and ce.source_type='MATERIAL_ISSUE' and ce.expense_head in ('WELDING_ROD','GRINDING_WHEEL','PPE','PAINT')) consumables,
+        (select coalesce(sum(ce.amount),0) from cost_entry ce where ce.job_id is not null and ce.category='LABOUR') manpower,
+        (select coalesce(sum(amount),0) from cost_entry where cost_centre='FACTORY_ADMIN' and expense_head='POWER' and status='POSTED' and entry_date between $1 and $2) electricity,
+        (select coalesce(sum(amount),0) from cost_entry where cost_centre='FACTORY_ADMIN' and expense_head<>'POWER' and status='POSTED' and entry_date between $1 and $2) factory_other
+      from job_order j`, [r.from, r.to]),
+    q(`select category, count(*) filter (where status='COMPLETED')::int done, count(*) filter (where status='IN_PROGRESS')::int wip, count(*) filter (where status='NEW')::int pending from job_order group by category`),
+  ]);
+  return { l1: l1!, l2: l2!, l3: l3!, l4: l4!, l5: l5!, l6 };
+}

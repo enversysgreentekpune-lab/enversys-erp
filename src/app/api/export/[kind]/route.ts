@@ -4,7 +4,7 @@ import ExcelJS from "exceljs";
 import { q } from "@/lib/db";
 import { can, scopeSql } from "@/lib/auth";
 import { apiUser, contentDisposition } from "@/lib/apiAuth";
-import { woScope, loadProposal } from "@/lib/access";
+import { woScope, loadProposal, proposalScopeSql } from "@/lib/access";
 import { audit } from "@/lib/audit";
 import { resolveFrame, type Frame } from "@/lib/period";
 import { salesKpis, finance, pipeline, woPortfolio } from "@/lib/queries";
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ kind
       if (!can(u, "leads", "export")) return deny();
       const r = resolveFrame((sp.get("frame") as Frame) ?? "fy", new Date(), { from: sp.get("from") ?? undefined, to: sp.get("to") ?? undefined });
       const p: unknown[] = [r.from, r.to];
-      const sc = scopeSql(u, can(u, "leads", "view")!, { owner: ["p.owner_id", "l.assigned_to"], vertical: "l.vertical_id" }, p);
+      const sc = proposalScopeSql(u, p);
       const rows = await q(`select p.*, c.name customer, e.name owner, v.name vertical from proposal p join lead l on l.id=p.lead_id join customer c on c.id=p.customer_id join vertical v on v.id=l.vertical_id left join employee e on e.id=p.owner_id
         where p.created_at::date between $1 and $2 and ${sc} ${sp.get("status") ? `and p.status='${String(sp.get("status")).replace(/[^A-Z_]/g, "")}'` : ""} order by p.created_at desc`, p);
       sheets.push({ name: "Proposals", rows, columns: [{ header: "Proposal", key: "proposal_no", width: 20 }, { header: "Customer", key: "customer", width: 30 }, { header: "Title", key: "title", width: 40 }, { header: "Vertical", key: "vertical" }, { header: "Owner", key: "owner" }, { header: "Rev", key: "current_rev" }, { header: "Status", key: "status" }, { header: "Quoted", key: "quoted_value", money: true }, { header: "Final", key: "final_value", money: true }, ...(cost ? [{ header: "Margin %", key: "quoted_margin_pct" }] : []), { header: "Lost reason", key: "lost_reason" }] });
@@ -71,6 +71,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ kind
         { k: "Proposals won", v: s.won.v, n: `${s.won.n}` }, { k: "Proposals lost", v: s.lost.v, n: `${s.lost.n}` }, { k: "In discussion", v: s.inDiscussion.v, n: `${s.inDiscussion.n}` }, { k: "In negotiation", v: s.inNegotiation.v, n: `${s.inNegotiation.n}` },
         { k: "Win ratio (value) %", v: s.winRateValue }] });
       sheets.push({ name: "Work orders", rows: wos, columns: [{ header: "WO", key: "wo_no", width: 20 }, { header: "Customer", key: "customer", width: 28 }, { header: "Type", key: "wo_type" }, { header: "Contract", key: "contract_value", money: true }, { header: "Billed", key: "billed", money: true }, { header: "Budget", key: "budget_cost", money: true }, { header: "Actual", key: "actual_cost", money: true }, { header: "Est. margin %", key: "est_margin_pct" }, { header: "Cost RAG", key: "cost_rag" }, { header: "Schedule RAG", key: "schedule_rag" }] });
+    } else if (kind === "performance") {
+      const sc = can(u, "tasks", "view");
+      if (!sc || sc === "own") return deny();
+      const r = resolveFrame((sp.get("frame") as Frame) ?? "month", new Date(), { from: sp.get("from") ?? undefined, to: sp.get("to") ?? undefined });
+      const scopeIds = sc === "company" ? null : [u.id, ...u.teamIds];
+      const emp = sp.get("employee");
+      if (emp && scopeIds && !scopeIds.includes(emp)) return deny();
+      const { performance, grade } = await import("@/lib/tasks");
+      const rows = (await performance(r.from, r.to, emp ? [emp] : scopeIds)).map((x) => ({ ...x, grade: grade(x.score), period: r.label }));
+      sheets.push({ name: "Performance", rows, columns: [{ header: "Period", key: "period", width: 18 }, { header: "Code", key: "emp_code" }, { header: "Employee", key: "name", width: 24 }, { header: "Role", key: "role", width: 22 },
+        { header: "Tasks", key: "assigned" }, { header: "Daily tasks", key: "daily" }, { header: "Completed", key: "completed" }, { header: "On time", key: "on_time" }, { header: "Late", key: "late" }, { header: "Lapsed", key: "lapsed" },
+        { header: "With evidence", key: "with_evidence" }, { header: "DWR days", key: "dwr_days" }, { header: "Present days", key: "present_days" }, { header: "Working days", key: "working_days" }, { header: "Score", key: "score" }, { header: "Grade", key: "grade" }] });
+      if (emp) {
+        const tasks = await q(`select t.title, t.kind, t.status, t.due_at, t.done_at, coalesce(t.completion_note, t.report_text) report, t.evidence_count, t.client_verified_at
+          from task t where t.assigned_to=$1 and t.status<>'CANCELLED' and coalesce(t.task_date, (t.due_at at time zone 'Asia/Kolkata')::date, t.created_at::date) between $2 and $3 order by coalesce(t.due_at, t.created_at)`, [emp, r.from, r.to]);
+        sheets.push({ name: "Tasks", rows: tasks.map((t) => ({ ...t, due_at: t.due_at?.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }), done_at: t.done_at?.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }), client: t.client_verified_at ? "Yes" : "" })),
+          columns: [{ header: "Task", key: "title", width: 40 }, { header: "Type", key: "kind" }, { header: "Status", key: "status" }, { header: "Due", key: "due_at", width: 20 }, { header: "Completed", key: "done_at", width: 20 }, { header: "Report", key: "report", width: 60 }, { header: "Evidence files", key: "evidence_count" }, { header: "Client OTP", key: "client" }] });
+      }
     } else return NextResponse.json({ error: "Unknown export" }, { status: 404 });
   } catch (e: any) {
     if (e?.digest?.includes?.("NEXT_HTTP_ERROR_FALLBACK") || e?.digest?.includes?.("NEXT_NOT_FOUND")) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -82,7 +100,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ kind
     const ws = wb.addWorksheet(s.name.slice(0, 31));
     ws.columns = s.columns.map((c) => ({ header: c.header, key: c.key, width: c.width ?? 14, style: c.money ? { numFmt: "#,##,##0" } : {} }));
     ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-    ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0B5394" } };
+    ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF15803D" } };
     ws.views = [{ state: "frozen", ySplit: 1 }];
     s.rows.forEach((r) => ws.addRow(r));
   }

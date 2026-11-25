@@ -4,7 +4,7 @@ import { requireUser, can } from "@/lib/auth";
 import { one, tx } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { safe, s, n, opt } from "@/lib/action";
-import { BizError, requiredApproverRole } from "@/lib/workflow";
+import { BizError } from "@/lib/workflow";
 import { saveUploads } from "@/lib/attachments";
 import { notify, idsByRole } from "@/lib/notify";
 
@@ -35,10 +35,15 @@ export async function addExpenseAction(_: any, fd: FormData) {
       const bill = await saveUploads(fd.getAll("bill") as File[], { entity: "cost_entry", entityId: ce!.id, folder: "11 Invoices & Payments", userId: u.id, db: c });
       if (bill[0]) await c.query(`update cost_entry set bill_attachment_id=$2 where id=$1`, [ce!.id, bill[0].id]);
       if (isClaim) {
-        const role = await requiredApproverRole("EXPENSE_CLAIM", amount, c);
-        await c.query(`insert into approval(entity, entity_id, doc_type, approver_role, requested_by, value) values ('cost_entry',$1,'EXPENSE_CLAIM',$2,$3,$4)`, [ce!.id, role, u.id, amount]);
+        // step 1: reporting manager (falls back to Accounts head if none), step 2: Accounts head
         const mgr = await one(`select manager_id from employee where id=$1`, [u.id], c);
-        await notify([mgr?.manager_id, ...(await idsByRole([role], c))], "Expense claim submitted", `${u.name}: ₹${Math.round(amount).toLocaleString("en-IN")} — ${s(fd, "description")}`, "/approvals", c);
+        if (mgr?.manager_id) {
+          await c.query(`insert into approval(entity, entity_id, doc_type, approver_role, approver_id, requested_by, value, step) values ('cost_entry',$1,'EXPENSE_CLAIM','REPORTING_MANAGER',$2,$3,$4,1)`, [ce!.id, mgr.manager_id, u.id, amount]);
+          await notify([mgr.manager_id], "Expense claim for your approval", `${u.name}: ₹${Math.round(amount).toLocaleString("en-IN")} — ${s(fd, "description")}`, "/approvals", c);
+        } else {
+          await c.query(`insert into approval(entity, entity_id, doc_type, approver_role, requested_by, value, step) values ('cost_entry',$1,'EXPENSE_CLAIM','ACCOUNTS_MANAGER',$2,$3,2)`, [ce!.id, u.id, amount]);
+          await notify(await idsByRole(["ACCOUNTS_MANAGER"], c), "Expense claim for accounts approval", `${u.name}: ₹${Math.round(amount).toLocaleString("en-IN")}`, "/approvals", c);
+        }
       }
       await audit(u.id, isClaim ? "CLAIM" : "CREATE", "cost_entry", ce!.id, null, { centre, head, amount, wo: woId }, c);
       return ce!.id;

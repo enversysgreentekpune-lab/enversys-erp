@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser, can, scopeSql } from "@/lib/auth";
 import { q } from "@/lib/db";
-import { woScope } from "@/lib/access";
+import { woScope, proposalScopeSql } from "@/lib/access";
 import { PageHeader, Card, Badge, Empty } from "@/components/ui";
 import { inrShort } from "@/lib/format";
 
@@ -23,7 +23,7 @@ export default async function Search({ searchParams }: { searchParams: Promise<{
     const leads = await q(`select l.id, l.enquiry_no, l.title, l.stage, l.est_value, c.name customer from lead l join customer c on c.id=l.customer_id where (l.enquiry_no ilike $1 or l.title ilike $1 or l.tender_no ilike $1) and ${sc} limit 10`, p);
     groups.push({ title: "Leads / enquiries", items: leads.map((r) => ({ href: `/leads/${r.id}`, title: `${r.enquiry_no} — ${r.title}`, sub: `${r.customer} · ${inrShort(r.est_value)}`, badge: r.stage })) });
     const p2: unknown[] = [like];
-    const sc2 = scopeSql(u, can(u, "leads", "view")!, { owner: ["p.owner_id", "l.assigned_to"], vertical: "l.vertical_id" }, p2);
+    const sc2 = proposalScopeSql(u, p2);
     const props = await q(`select p.id, p.proposal_no, p.title, p.status, p.quoted_value from proposal p join lead l on l.id=p.lead_id where (p.proposal_no ilike $1 or p.title ilike $1) and ${sc2} limit 10`, p2);
     groups.push({ title: "Proposals", items: props.map((r) => ({ href: `/proposals/${r.id}`, title: `${r.proposal_no} — ${r.title}`, sub: inrShort(r.quoted_value), badge: r.status })) });
   }

@@ -52,9 +52,9 @@ export function Badge({ children, tone, status }: { children?: ReactNode; tone?:
 
 export function Stat({ label, value, sub, href, tone, delta }: { label: string; value: ReactNode; sub?: ReactNode; href?: string; tone?: "red" | "green" | "amber"; delta?: number | null }) {
   const inner = (
-    <div className={clsx("card h-full p-3 transition", href && "hover:border-brand-500 hover:shadow")}>
-      <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={clsx("mt-1 text-lg font-semibold tabular-nums sm:text-xl", tone === "red" && "text-rose-600", tone === "green" && "text-emerald-600", tone === "amber" && "text-amber-600")}>{value}</div>
+    <div className={clsx("card h-full px-3.5 py-3 transition", href && "hover:border-brand-600")}>
+      <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-slate-500">{label}</div>
+      <div className={clsx("mt-1 font-display text-lg font-bold tabular-nums text-navy-900 sm:text-xl dark:text-slate-100", tone === "red" && "!text-rose-600", tone === "green" && "!text-brand-700", tone === "amber" && "!text-amber-600")}>{value}</div>
       <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
         {delta != null && Number.isFinite(delta) && (
           <span className={clsx("font-medium", delta >= 0 ? "text-emerald-600" : "text-rose-600")}>{delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(0)}%</span>
@@ -110,5 +110,33 @@ export function Progress({ value, tone }: { value: number; tone?: "red" | "amber
     <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-800">
       <div className={clsx("h-1.5 rounded-full", tone === "red" ? "bg-rose-500" : tone === "amber" ? "bg-amber-500" : "bg-emerald-500")} style={{ width: `${v}%` }} />
     </div>
+  );
+}
+
+/** A labelled row of KPI tiles (Directors dashboard lines) */
+export function KpiLine({ title, children, cols = 6 }: { title: string; children: ReactNode; cols?: number }) {
+  return (
+    <section className="grid gap-2 md:grid-cols-[170px_minmax(0,1fr)] md:items-stretch">
+      <div className="flex items-center border-l-2 border-brand-600 pl-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{title}</div>
+      <div className={clsx("grid grid-cols-2 gap-2 sm:grid-cols-3", cols >= 6 ? "xl:grid-cols-6" : cols === 5 ? "xl:grid-cols-5" : "xl:grid-cols-4")}>{children}</div>
+    </section>
+  );
+}
+
+/** Process stepper (Lead → Customer → Details, Cost sheet → … → Project code) */
+export function Stepper({ steps }: { steps: { label: string; done: boolean; current?: boolean; note?: ReactNode; optional?: boolean }[] }) {
+  return (
+    <ol className="mb-4 flex flex-wrap gap-y-2 text-xs">
+      {steps.map((s, i) => (
+        <li key={s.label} className="flex items-center">
+          <span className={clsx("flex items-center gap-2 rounded-full border px-2.5 py-1", s.done ? "border-brand-600 bg-brand-50 text-brand-700" : s.current ? "border-navy-600 text-navy-600" : "border-slate-200 text-slate-400")}>
+            <span className={clsx("grid h-4 w-4 place-items-center rounded-full text-[10px] font-bold", s.done ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-500")}>{s.done ? "✓" : i + 1}</span>
+            {s.label}{s.optional && <span className="text-[10px] text-slate-400">(if required)</span>}
+            {s.note && <span className="text-slate-500">· {s.note}</span>}
+          </span>
+          {i < steps.length - 1 && <span className="mx-1 text-slate-300">›</span>}
+        </li>
+      ))}
+    </ol>
   );
 }

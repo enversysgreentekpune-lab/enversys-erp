@@ -1,65 +1,61 @@
 # Enversys Business Suite
 
-Covers Enversys's whole job lifecycle in one system: **Customer → Enquiry → Proposal (material spec + cost sheet) → Won PO → Work Order → Purchase → Execution → … → Invoicing**, plus HR, time office and admin expenses. Every cost is booked against a WO number. The MD gets a company-wide command dashboard.
-
-> **Status: Phase 1 complete** (per spec §13), with the Phase-2 purchase slice (auto PR → editable draft POs → approval → committed cost) and admin expenses pulled forward. See the [roadmap](#phase-status) below.
+One system for Enversys (STP, ETP, WTP, ZLD, OWC): **client → lead enquiry → proposal (cost sheet, site visit, revisions) → PO / SO won → project code → purchase → store → Markal manufacturing → dispatch → accounts**, plus employee attendance, location, tasks, expenses, performance and the Directors dashboard. Every cost is booked to a project code. The look follows www.enversys.com: white screens, brand green for actions, Montserrat and Inter type, and the Enversys logo.
 
 ## Quick start (demo)
 ```bash
 cp .env.example .env          # set DATABASE_URL, SESSION_SECRET
 npm install
 npm run db:migrate && npm run db:seed
-npm run dev                   # http://localhost:3000
+npm run dev                   # http://localhost:3000 — the OTP is shown on the login screen in demo mode
 ```
-In dev the OTP is shown on the login screen. Demo users (all seeded):
 
-| Mobile | Person | Role |
+| Mobile | Person | What to look at |
 |---|---|---|
-| 9800000001 | Amol Gajare | Managing Director |
-| 9800000002 | Rahul Joshi | Super Admin (IT) |
-| 9800000003 | Sanjay Kulkarni | Business Head — Projects |
-| 9800000006 | Neha Kapoor | Sales Manager |
-| 9800000007 | Rohit Shinde | Sales Engineer |
-| 9800000010 | Ganesh Pawar | Purchase Manager |
-| 9800000012 | Kiran Bhosale | Project Manager |
-| 9800000015 | Prakash Gaikwad | Factory Manager (Markal) |
-| 9800000017 | Ramesh Yadav | Factory Worker |
-| 9800000022 | Shweta Kulkarni | Accounts Manager |
-| 9800000024 | Priya Wagh | HR Manager |
-| 9800000025 | Balasaheb Ghule | Time Office Keeper |
+| 9800000001 | Amol Gajare, Director | Directors dashboard, everything |
+| 9800000007 | Rohit Shinde, Sales Engineer | Only his own leads and proposals |
+| 9800000012 | Kiran Bhosale, Project Manager | Projects, team tasks, approving a field service report |
+| 9800000015 | Prakash Gaikwad, Factory Manager | Manufacturing, manpower, store |
+| 9800000027 | Mahesh Lokhande, Storekeeper | Store, material receipts, issues to jobs |
+| 9800000022 | Shweta Kulkarni, Accounts | Accounts, SO billing, expense approvals |
+| 9800000024 | Priya Wagh, HR | Employees, live map, performance |
+| 9800000014 | Sachin More, Site Engineer (field) | Field view: attendance and tasks only |
+| 9800000021 | Ajay Thorat, O&M Technician (field) | Field service with client OTP |
 
-Seed data: 7 verticals (demo activity in Projects, Manufacturing and O&M), 27 employees across HO / Markal / 3 sites with 45 days of attendance, 10 customers, 25 leads across every stage, 8 proposals (3 won, 2 lost, 2 in discussion, 1 in negotiation), 3 live WOs (one manufacturing WO with Markal fabrication, one EPC project, one O&M), auto-drafted and approved POs, DWR labour costs, invoices/receipts, and 12 months of office + factory admin expenses with budgets. Proposals and WOs are created through the real workflow engine, not inserted directly.
+## Features
 
-## Documentation
-- [Architecture](docs/ARCHITECTURE.md): stack, design decisions, list of what is not implemented yet
-- [ERD / data model](docs/ERD.md)
-- [Role–permission matrix](docs/PERMISSIONS.md) (generated from code; editable in Admin)
-- [Screen list](docs/SCREENS.md)
-- [API & webhooks](docs/API.md)
-- [Deployment](docs/DEPLOYMENT.md)
-- [User guide by role](docs/USER_GUIDE.md)
+| # | Requirement | Where |
+|---|---|---|
+| 1 | Client dashboard: total, new this month / year, active clients, proposals submitted recently | Clients |
+| 2 | Lead received → customer register → lead details. Only the MD sees all leads; others see leads assigned to them | Lead Enquiries |
+| 3 | Proposal flow: cost sheet → submission → site visit report with photos (if required) → revision → PO/WO win → PO/SO copy upload → project code. Only the MD sees all proposals; others see the ones they created or are assigned | Proposals |
+| 4 | Purchase dashboard: project code → cost-sheet budget → purchase orders → material receipt register and bill receipts (paid / unpaid) | Purchase |
+| 5 | Manufacturing: every job has a project code and project item code; daily manpower and who works on which project; material cost by type (MS/SS sheets, welding rods, grinding wheels, PPE, paint…), electricity, site admin; cost per item and per tonne; Tanks / Skid & Assembly / Other / OWC Skid & Assembly / Control Panels completed, in progress, new pending | Manufacturing |
+| 6 | Store: material register, stock by location, low stock, delayed material, bills, receipt dates and challans with evidence | Store |
+| 7 | Dispatch: material by project code, projects dispatched / pending, project item register (received / not received), challans with photos, bill, e-way bill, delivery challan, client received copy | Dispatch |
+| 8 | Accounts: billed, unbilled as per PO, GST received and not received | Accounts |
+| 9 | SO dashboard: won SOs, completed / in progress, due list: milestones → achieved → billed → unbilled → GST | Service Orders |
+| 10 | Employee management: daily and monthly attendance, current location map (Google Maps links), time office, leave approval by manager | Employees, Time Office |
+| 11 | Task management: assigned, completed, pending, lapsed | Tasks |
+| 12 | Expenses with proof, approved by reporting manager and then accounts head | Expenses, Approvals |
+| 13 | Performance matrix from daily and assigned tasks with evidence, DWRs and attendance; downloadable per employee | Performance |
+| 14 | Field employees see only attendance and tasks; upload service report; transfer task; email updates; report sent to client after manager approval; client confirms completion with OTP on mobile and email | My Attendance, My Tasks |
+| 15 | Directors dashboard: six KPI lines (sales, orders, procurement, people & admin, manufacturing cost, jobs) for any period | Directors Dashboard |
+
+Also included from the first release: OTP login with PIN and device control, role & permission matrix editor, approval matrix, Word/Excel quote generation and email, revision compare, auto purchase requisition and draft POs, WO budget vs actual, job dossier ZIP, audit log, Excel exports, PWA install.
 
 ## Tests
-`npm test` runs 25 tests: cost-sheet engine, RBAC defaults, FY/quarter ranges, Word/Excel template rendering, Indian amount-in-words, and an end-to-end DB flow (lead → proposal → discount-based approval → submitted → won → WO with cost-sheet budget → PR split Markal/vendor → draft PO → PO approval → committed cost → DWR labour cost → WO P&L), including the guards and the audit trail.
+`npm test` runs 37 tests against a separate test database. They cover the cost engine, role rules (MD-only lead visibility, field-staff restrictions), FY periods, document templates, the sales-to-project flow, purchase → GRN → bill → payment, stock checks on issue, dispatch and invoice limits, the field-service OTP flow, two-step expenses, daily tasks and the performance score.
 
-## Acceptance criteria (spec §12)
-| Criterion | Status |
-|---|---|
-| Mobile + OTP login, role-scoped visibility | ✅ |
-| Lead created, emailed with Word + Excel attachments, tracked through all stages, email/status timeline | ✅ (inbound replies thread via webhook) |
-| Proposal with spec + cost sheet, revisions, approvals, Word & Excel quote sent from app | ✅ |
-| Proposal stats Won/Lost/In Discussion/In Negotiation, counts, values, win ratio, any date range | ✅ |
-| Won → WO with cost-sheet budget → specs to Purchase → draft POs auto-generated & editable | ✅ |
-| WO assigned to PM + executors; fabrication scope → Markal **job order with drawings** | ◐ PR lines are routed to Markal and the Factory Manager gets a kick-off task; the job-order module is Phase 2 |
-| Markal completion → inspection request → auto dispatch docs | 🔜 Phase 2 |
-| All costs roll up under the WO with live budget vs actual & margin | ✅ for PO, DWR labour, site/freight/subcontract and expense claims (factory production costing comes with Phase 2) |
-| Office & factory admin expenses recorded/reported separately | ✅ |
-| Attendance geo/biometric/manual, OT, leave for HO/factory/sites | ✅ (payroll push Phase 3) |
-| MD dashboard with all sections, Monthly/Quarterly/Annual/Custom, drill-down | ✅ Sales, Projects, Purchase, HR & Admin, Financials and Manufacturing have live data. O&M / Consultancy / Trading / Maintenance tabs show their WOs; their dedicated modules are Phase 3 |
-| One-click WO dossier | ✅ ZIP |
-| Every action audit-logged | ✅ |
+## Launch
+- **Hosting:** `render.yaml` deploys the app and a PostgreSQL database on Render in one step. Any Node 20+ server with PostgreSQL 14+ also works. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+- **Before real users:**
+  - Set `DEMO_MODE=false`.
+  - Connect MSG91 for OTP SMS. Client OTPs use the same gateway; DLT template registration takes 1–2 weeks.
+  - Connect SMTP (Microsoft 365 / Google) so task updates and service reports reach clients.
+  - Add persistent file storage.
+  - Load real employees, clients and items.
+- **Maps:** the live map uses OpenStreetMap tiles and links each person to Google Maps. A Google Maps API key is not required.
 
-## Phase status
-- **Phase 1 (done):** auth & RBAC, masters, customers, leads with email, proposals with spec/cost sheet and quote generation, proposal statistics, WO creation, employee dashboard & DWR, attendance & time office, MD dashboard. Also included: auto PR/draft PO/PO approval, admin expenses & claims, job dossier ZIP.
-- **Phase 2 (next):** RFQ/comparative statement, GRN & 3-way match, stores; Markal job orders, routing, job cards, production costing, factory KPIs, machine maintenance; inspection & NCR; dispatch documents; projects WBS/Gantt/DPR/drawing register; background job queue for SLA escalation.
-- **Phase 3:** I&C, O&M contracts/assets/PM schedules, maintenance service calls, consultancy, trading, full finance (AR/AP, BG/EMD, cash flow, Tally), payroll, WhatsApp/SMS notifications, scheduled MIS emails.
+## Documentation
+[Architecture](docs/ARCHITECTURE.md) · [Data model](docs/ERD.md) · [Permissions](docs/PERMISSIONS.md) · [Screens](docs/SCREENS.md) · [API](docs/API.md) · [Deployment](docs/DEPLOYMENT.md) · [User guide](docs/USER_GUIDE.md)

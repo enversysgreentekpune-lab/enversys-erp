@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser, can } from "@/lib/auth";
 import { q, one } from "@/lib/db";
-import { loadLead } from "@/lib/access";
+import { loadLead, proposalScopeSql } from "@/lib/access";
 import { inr, inrShort, dt, dtm, label } from "@/lib/format";
 import { PageHeader, Card, Badge, Table, Field, Tabs, Empty } from "@/components/ui";
 import { ActionForm } from "@/components/ActionForm";
@@ -12,6 +12,7 @@ import { GeoFields } from "@/components/GeoFields";
 import { logActivityAction, uploadLeadDocsAction, updateLeadAction, startProposalAction } from "@/app/actions/leads";
 import { LEAD_STAGES, LOST_REASONS, stageLabel, stageProb } from "@/lib/workflow";
 import { fill } from "@/lib/email";
+import { Stepper } from "@/components/ui";
 
 export default async function LeadDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const u = await requireUser();
@@ -24,7 +25,7 @@ export default async function LeadDetail({ params, searchParams }: { params: Pro
     q(`select a.*, e.name by_name from activity a left join employee e on e.id=a.created_by where entity='lead' and entity_id=$1 order by created_at desc`, [id]),
     q(`select m.*, e.name sender from email_message m left join employee e on e.id=m.sent_by where lead_id=$1 order by created_at desc`, [id]),
     q(`select * from attachment where (entity='lead' and entity_id=$1) or (entity='proposal' and entity_id in (select id from proposal where lead_id=$1)) order by created_at desc`, [id]),
-    q(`select * from proposal where lead_id=$1 order by created_at`, [id]),
+    (async () => { const pp: unknown[] = [id]; return q(`select * from proposal p where lead_id=$1 and ${proposalScopeSql(u, pp)} order by created_at`, pp); })(),
     q(`select name, email from contact where customer_id=$1 and email is not null`, [lead.customer_id]),
     q(`select code, name, subject, body from template where kind='email' and is_active`),
     q(`select e.id, e.name from employee e join role r on r.id=e.role_id where r.code in ('SALES_ENGINEER','SALES_MANAGER','ESTIMATION_ENGINEER','BUSINESS_HEAD') and e.is_active order by e.name`),
@@ -41,6 +42,13 @@ export default async function LeadDetail({ params, searchParams }: { params: Pro
         actions={!closed && can(u, "leads", "create") && (
           <ActionForm action={startProposalAction} hideSubmit><input type="hidden" name="id" value={id} /><button className="btn-primary">+ New proposal</button></ActionForm>
         )} />
+      <Stepper steps={[
+        { label: "Lead received", done: true, note: `${dt(lead.enquiry_date)} · ${label(lead.source)}` },
+        { label: "Customer register", done: true, note: cust.code },
+        { label: "Lead details", done: !!lead.scope && Number(lead.est_value) > 0 },
+        { label: "Proposal", done: props.length > 0 },
+        { label: "Won", done: lead.stage === "WON" },
+      ]} />
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

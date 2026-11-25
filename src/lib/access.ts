@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { one } from "./db";
 import { can, scopeSql, Forbidden, type CurrentUser } from "./auth";
 import type { Action } from "./rbac";
+import { canApproveAs } from "./workflow";
 
 /** Loads a lead only if the user's scope permits; 404 otherwise (does not leak existence) */
 export async function loadLead(u: CurrentUser, id: string, action: Action = "view") {
@@ -16,11 +17,32 @@ export async function loadLead(u: CurrentUser, id: string, action: Action = "vie
   return lead;
 }
 
+/** Roles whose pending approvals this user may decide */
+export function approvableRoles(u: CurrentUser) {
+  return ["SALES_MANAGER", "PURCHASE_MANAGER", "PROJECT_MANAGER", "HR_MANAGER", "ACCOUNTS_MANAGER", "BUSINESS_HEAD", "MD", "SUPER_ADMIN"].filter((r) => canApproveAs(u.roleCode, r));
+}
+
+/**
+ * Proposal visibility: the MD (company scope) sees all; everyone else sees only proposals they created or that are
+ * assigned to them, plus proposals they are asked to approve (or already decided).
+ */
+export function proposalScopeSql(u: CurrentUser, p: unknown[], alias = "p", action: Action = "view") {
+  const sc = can(u, "leads", action);
+  if (!sc) return "false";
+  if (sc === "company") return "true";
+  p.push(u.id);
+  const me = `$${p.length}`;
+  p.push(approvableRoles(u));
+  const roles = `$${p.length}::text[]`;
+  return `(${alias}.owner_id = ${me} or ${alias}.created_by = ${me} or exists (select 1 from approval a where a.entity='proposal' and a.entity_id=${alias}.id and (a.decided_by = ${me} or (a.status='PENDING' and a.approver_role = any(${roles})))))`;
+}
+
 export async function loadProposal(u: CurrentUser, id: string, action: Action = "view") {
-  const p = await one(`select * from proposal where id=$1`, [id]);
-  if (!p) notFound();
-  await loadLead(u, p.lead_id, action);
-  return p;
+  const p: unknown[] = [id];
+  const w = proposalScopeSql(u, p, "p", action);
+  const row = await one(`select p.* from proposal p where p.id=$1 and ${w}`, p);
+  if (!row) { if (action === "view") notFound(); throw new Forbidden(); }
+  return row;
 }
 
 export function woScope(u: CurrentUser, action: Action, p: unknown[]) {

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { requirePage, can, scopeSql } from "@/lib/auth";
+import { requirePage, can } from "@/lib/auth";
+import { proposalScopeSql } from "@/lib/access";
 import { q } from "@/lib/db";
 import { inr, inrShort, dt, pct, label } from "@/lib/format";
 import { resolveFrame, type Frame } from "@/lib/period";
@@ -17,7 +18,7 @@ export default async function Proposals({ searchParams }: { searchParams: Promis
   const range = resolveFrame((sp.frame as Frame) ?? "fy", new Date(), { from: sp.from, to: sp.to });
   const showCost = !!can(u, "costing", "view");
   const p: unknown[] = [range.from, range.to];
-  const w = [`p.created_at::date between $1 and $2`, scopeSql(u, can(u, "leads", "view")!, { owner: ["p.owner_id", "p.created_by", "l.assigned_to"], vertical: "l.vertical_id" }, p)];
+  const w = [`p.created_at::date between $1 and $2`, proposalScopeSql(u, p)];
   if (sp.vertical) { p.push(sp.vertical); w.push(`l.vertical_id=$${p.length}`); }
   if (sp.owner) { p.push(sp.owner); w.push(`p.owner_id=$${p.length}`); }
   if (sp.q) { p.push(`%${sp.q}%`); w.push(`(p.proposal_no ilike $${p.length} or p.title ilike $${p.length} or c.name ilike $${p.length})`); }

@@ -10,6 +10,7 @@ import { nextNo } from "../src/lib/numbering";
 import { createProposal, saveRevision, submitForApproval, decideApproval, setProposalStatus, markWon, changeLeadStage, submitPoForApproval } from "../src/lib/workflow";
 import { DEFAULT_PARAMS } from "../src/lib/costing";
 import { iso } from "../src/lib/period";
+import { receiveAndBill, seedJobsAndStores, seedPeopleOps } from "./seed-ops";
 
 let seed = 42;
 const rnd = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);
@@ -142,8 +143,32 @@ async function main() {
     ["FB-PV-5KL", "Pressure vessel 5 KL", "ASME Sec VIII Div 1, 10 bar, MS + epoxy lined", "Enversys-Markal", "MS", "NOS", 0, "FABRICATED", ""],
     ["FB-SKID-01", "Dosing skid", "MS skid with SS tray, 2 pumps + tank", "Enversys-Markal", "MS/SS", "SET", 0, "FABRICATED", ""],
   ];
-  for (const [code, d, s, make, moc, uom, rate, cat, v] of items)
-    await ins("item", { code, description: d, specification: s, make, moc, uom, hsn: cat === "RAW_MATERIAL" ? "7219" : "8413", gst_pct: 18, category: cat, last_purchase_rate: rate || null, standard_rate: rate || null, preferred_vendor_id: v ? V[v].id : null });
+  items.push(
+    ["RM-MS-SHEET-5", "MS sheet 5 mm", "IS 2062 E250, 5 mm, 1250 x 2500", "JSW", "MS", "KG", 68, "RAW_MATERIAL", "V001"],
+    ["RM-SS-SHEET-3", "SS304 sheet 3 mm", "ASTM A240 SS304, 3 mm, 2B", "Jindal", "SS304", "KG", 280, "RAW_MATERIAL", "V001"],
+    ["RM-MS-ANGLE-65", "MS angle 65x65x6", "IS 2062 E250 angle", "SAIL", "MS", "KG", 70, "RAW_MATERIAL", "V001"],
+    ["CON-WELD-E6013", "Welding electrode E6013 3.15 mm", "AWS E6013 general purpose", "Ador", "-", "KG", 210, "CONSUMABLE", "V001"],
+    ["CON-WELD-SS308", "SS welding rod E308L 2.5 mm", "AWS E308L-16", "Ador", "SS", "KG", 950, "CONSUMABLE", "V001"],
+    ["CON-GW-4", "Grinding wheel 4 inch", "100 x 6 x 16 mm depressed centre", "Norton", "-", "NOS", 45, "CONSUMABLE", "V001"],
+    ["CON-CW-14", "Cutting wheel 14 inch", "355 x 3 x 25.4 mm", "Norton", "-", "NOS", 180, "CONSUMABLE", "V001"],
+    ["CON-PPE-KIT", "PPE kit", "Helmet, gloves, goggles, ear plugs", "Karam", "-", "SET", 650, "CONSUMABLE", "V001"],
+    ["BO-ENC-MCC", "Panel enclosure 1200x800x400", "CRCA 2 mm, IP54, powder coated", "Rittal", "CRCA", "NOS", 28000, "BOUGHT_OUT", "V006"],
+    ["FB-OWC-500", "OWC skid 500 kg/day", "Organic waste converter skid with shredder, composter drum and curing trays", "Enversys-Markal", "MS/SS", "SET", 0, "FABRICATED", ""],
+    ["FB-MCC-01", "MCC control panel", "Motor control centre with VFDs, PLC I/O and HMI", "Enversys-Markal", "CRCA", "NOS", 0, "FABRICATED", ""],
+    ["FB-PLAT-01", "Platforms & pipe supports", "MS structure, chequered plate, handrails, galvanised", "Enversys-Markal", "MS", "LOT", 0, "FABRICATED", ""],
+  );
+  const GROUP: Record<string, [string, number | null, number | null]> = {
+    "RM-SS304-PL6": ["SS_SHEET", null, 800], "RM-SS304-PL10": ["SS_SHEET", null, 600], "RM-MS-PL8": ["MS_SHEET", null, 1500], "RM-MS-SHEET-5": ["MS_SHEET", null, 2000],
+    "RM-SS-SHEET-3": ["SS_SHEET", null, 500], "RM-MS-ANGLE-65": ["MS_STRUCTURE", null, 1000], "CON-WELD-E6013": ["WELDING_ROD", null, 100], "CON-WELD-SS308": ["WELDING_ROD", null, 30],
+    "CON-GW-4": ["GRINDING_WHEEL", null, 100], "CON-CW-14": ["GRINDING_WHEEL", null, 40], "CON-PPE-KIT": ["PPE", null, 20], "CON-PAINT-EP": ["PAINT", null, 100],
+    "BO-CABLE-4C": ["ELECTRICAL", null, null], "BO-ENC-MCC": ["ELECTRICAL", null, null], "FB-TANK-SS10": ["OTHER", 1650, null], "FB-PV-5KL": ["OTHER", 2100, null],
+    "FB-SKID-01": ["OTHER", 650, null], "FB-OWC-500": ["OTHER", 1800, null], "FB-MCC-01": ["ELECTRICAL", 350, null], "FB-PLAT-01": ["MS_STRUCTURE", 2400, null],
+  };
+  for (const [code, d, s, make, moc, uom, rate, cat, v] of items) {
+    const g = GROUP[code] ?? [cat === "BOUGHT_OUT" ? "BOUGHT_OUT" : "OTHER", null, null];
+    await ins("item", { code, description: d, specification: s, make, moc, uom, hsn: cat === "RAW_MATERIAL" ? "7219" : "8413", gst_pct: 18, category: cat, last_purchase_rate: rate || null, standard_rate: rate || null,
+      preferred_vendor_id: v ? V[v].id : null, material_group: g[0], unit_weight_kg: g[1], reorder_level: g[2] });
+  }
 
   // ---------- Customers ----------
   const C: any[] = [];
@@ -176,10 +201,10 @@ async function main() {
   ];
   const stagesPlan = ["NEW", "NEW", "NEW", "QUALIFIED", "QUALIFIED", "SITE_VISIT", "SITE_VISIT", "ESTIMATION", "ESTIMATION", "ESTIMATION",
     "PROPOSAL_SUBMITTED", "PROPOSAL_SUBMITTED", "IN_DISCUSSION", "IN_DISCUSSION", "IN_NEGOTIATION", "WON", "WON", "WON", "LOST", "LOST",
-    "ON_HOLD", "DROPPED", "REGRETTED", "QUALIFIED", "IN_NEGOTIATION"];
+    "ON_HOLD", "WON", "REGRETTED", "WON", "IN_NEGOTIATION"];
   const leads: any[] = [];
   for (let i = 0; i < 25; i++) {
-    const [v, cat, title, val] = scopes[i === 15 ? 0 : i === 16 ? 2 : i === 17 ? 4 : i % scopes.length];
+    const [v, cat, title, val] = scopes[i === 15 ? 0 : i === 16 ? 2 : i === 17 ? 4 : i === 21 ? 8 : i === 23 ? 3 : i % scopes.length];
     const cust = C[i % C.length];
     const owner = v === "MFG" ? E.se2 : i % 3 === 0 ? E.sm : E.se1;
     const age = 200 - i * 7 + Math.floor(rnd() * 5);
@@ -228,6 +253,9 @@ async function main() {
         { sl: 3, item_code: "BO-DIFF-FB", description: "Fine bubble diffusers", specification: "9\" EPDM disc", make: "SSI", qty: 120, uom: "NOS", gst_pct: 18 },
         { sl: 4, item_code: "BO-PLC-S7", description: "PLC control panel", specification: "S7-1200 + 7\" HMI", make: "Siemens", qty: 1, uom: "SET", gst_pct: 18 },
         { sl: 5, item_code: "FB-SKID-01", description: "Chemical dosing skid", specification: "MS skid, SS tray, 2 dosing pumps + 500 L tank", make: "Enversys-Markal", moc: "MS/SS", qty: i % 2 ? 2 : 1, uom: "SET", gst_pct: 18, is_fabricated: true, drawing_ref: "ENV-MKL-GA-205" },
+        { sl: 6, item_code: "FB-OWC-500", description: "OWC skid 500 kg/day", specification: "Shredder, composter drum, curing trays, odour control", make: "Enversys-Markal", moc: "MS/SS", qty: 1, uom: "SET", gst_pct: 18, is_fabricated: true, drawing_ref: "ENV-MKL-GA-310" },
+        { sl: 7, item_code: "FB-MCC-01", description: "MCC control panel", specification: "MCC with VFDs for blowers, PLC I/O, HMI", make: "Enversys-Markal", moc: "CRCA", qty: 1, uom: "NOS", gst_pct: 18, is_fabricated: true, drawing_ref: "ENV-MKL-EL-120" },
+        { sl: 8, item_code: "FB-PLAT-01", description: "Platforms & pipe supports", specification: "MS structure, chequered plate, handrails, HDG", make: "Enversys-Markal", moc: "MS", qty: 1, uom: "LOT", gst_pct: 18, is_fabricated: true, drawing_ref: "ENV-MKL-ST-402" },
       ],
       cost: [
         { spec_sl: 1, category: "BOUGHT_OUT", description: "Blowers", qty: 2, uom: "NOS", rate: 245000, rate_source: "LAST_PO" },
@@ -235,6 +263,9 @@ async function main() {
         { spec_sl: 3, category: "BOUGHT_OUT", description: "Diffusers", qty: 120, uom: "NOS", rate: 1450, rate_source: "VENDOR_QUOTE" },
         { spec_sl: 4, category: "BOUGHT_OUT", description: "PLC panel", qty: 1, uom: "SET", rate: 385000, rate_source: "VENDOR_QUOTE" },
         { spec_sl: 5, category: "FABRICATION", description: "Markal: skid fabrication incl. material", qty: i % 2 ? 2 : 1, uom: "SET", rate: 165000, rate_source: "STANDARD" },
+        { spec_sl: 6, category: "FABRICATION", description: "Markal: OWC skid fabrication incl. bought-outs", qty: 1, uom: "SET", rate: 420000, rate_source: "STANDARD" },
+        { spec_sl: 7, category: "FABRICATION", description: "Markal: MCC panel wiring incl. switchgear", qty: 1, uom: "NOS", rate: 260000, rate_source: "VENDOR_QUOTE" },
+        { spec_sl: 8, category: "FABRICATION", description: "Markal: platforms & supports 2.4 t", qty: 2400, uom: "KG", rate: 95, rate_source: "STANDARD" },
         { spec_sl: null, category: "ENGINEERING", description: "Process design & drawings", qty: 1, uom: "LOT", rate: 180000 },
         { spec_sl: null, category: "IC", description: "Erection & commissioning", qty: 1, uom: "LOT", rate: 420000 },
         { spec_sl: null, category: "SITE_EXP", description: "Site expenses – travel, lodging, DA", qty: 1, uom: "LOT", rate: 95000 },
@@ -242,7 +273,7 @@ async function main() {
       ],
     };
   };
-  const proposalLeads = leads.filter((l) => ["WON", "LOST", "IN_DISCUSSION", "IN_NEGOTIATION"].includes(l.planned)).slice(0, 8);
+  const proposalLeads = leads.filter((l) => ["WON", "LOST", "IN_DISCUSSION", "IN_NEGOTIATION"].includes(l.planned)).slice(0, 10);
   // ensure won leads are one per vertical-ish: lead order gives WON at idx 15,16,17 (PRJ/MFG/OM mix)
   const wos: any[] = [];
   for (const [i, l] of proposalLeads.entries()) {
@@ -251,7 +282,7 @@ async function main() {
     const { spec, cost: baseCost } = specFor(l.v, i);
     const f = Math.min(3, Math.max(0.5, l.est_value / (l.v === "OM" ? 1.86e6 : l.v === "MFG" ? 2.3e6 : 2.6e6)));
     const cost = baseCost.map((c) => ({ ...c, rate: Math.round(c.rate * f) }));
-    const discount = [0, 3, 6, 2, 12, 4, 0, 8][i];
+    const discount = [0, 3, 6, 2, 12, 4, 0, 8, 3, 2][i] ?? 0;
     const params = { ...DEFAULT_PARAMS, margin_pct: l.v === "OM" ? 15 : l.v === "MFG" ? 20 : 18, discount_pct: discount, gst_mode: (i === 7 ? "INTER" : "INTRA") as "INTRA" | "INTER" };
     await one(`update proposal_revision set params=$2 where id=$1`, [rev.id, JSON.stringify(params)]);
     await saveRevision(rev.id, { spec, cost, params, terms: (await one(`select terms from proposal_revision where id=$1`, [rev.id])).terms }, l.owner.id, { canOverrideMargin: true });
@@ -266,9 +297,10 @@ async function main() {
       const pr = await one(`select quoted_value from proposal where id=$1`, [p.id]);
       const woType = l.v === "MFG" ? "MANUFACTURING" : l.v === "OM" ? "OM" : "PROJECT";
       const pm = l.v === "MFG" ? E.pm2 : l.v === "OM" ? E.om : E.pm1;
-      const wo = await markWon(p.id, { poNo: `${l.v === "OM" ? "OM" : "4500"}${Math.floor(100000 + rnd() * 899999)}`, poDate: iso(daysAgo(l.age - 60)), poValue: Math.round(pr.quoted_value * 0.98), woType,
-        pmId: pm.id, executorIds: l.v === "MFG" ? [E.ps.id, E.fw1.id, E.fw2.id] : l.v === "OM" ? [E.omt.id] : [E.site1.id], startDate: iso(daysAgo(l.age - 62)), endDate: iso(daysAgo(l.age - 62 - 150)) }, E.sm.id);
-      wos.push({ ...wo, v: l.v, age: l.age - 60 });
+      const woAge = Math.max(l.age - 60, 12 + (i % 3) * 5);
+      const wo = await markWon(p.id, { poNo: `${l.v === "OM" ? "OM" : "4500"}${Math.floor(100000 + rnd() * 899999)}`, poDate: iso(daysAgo(woAge)), poValue: Math.round(pr.quoted_value * 0.98), woType,
+        pmId: pm.id, executorIds: l.v === "MFG" ? [E.ps.id, E.fw1.id, E.fw2.id] : l.v === "OM" ? [E.omt.id] : [E.site1.id], startDate: iso(daysAgo(woAge - 2)), endDate: iso(daysAgo(woAge - 2 - 150)) }, E.sm.id);
+      wos.push({ ...wo, v: l.v, age: woAge });
     }
     // backdate proposal & approvals for realistic time-series
     await pool.query(`update proposal set created_at=$2, submitted_at=$3, decided_at = case when decided_at is not null then $4::timestamptz else null end where id=$1`,
@@ -302,14 +334,19 @@ async function main() {
         const a = await one(`select * from approval where entity_id=$1 and status='PENDING'`, [po.id]);
         const approver = a.approver_role === "MD" ? E.md : a.approver_role === "BUSINESS_HEAD" ? (wo.v === "MFG" ? E.bhm : wo.v === "OM" ? E.bho : E.bhp) : E.pm_pur;
         await decideApproval(a.id, true, "OK", { id: approver.id, roleCode: a.approver_role });
-        await pool.query(`update purchase_order set status='RECEIVED' where id=$1`, [po.id]);
-        // vendor bill booked -> committed becomes posted
-        await pool.query(`update cost_entry set status='POSTED', entry_date=$2 where source_id=$1`, [po.id, iso(daysAgo(Math.max(wo.age - 20, 5)))]);
+        await pool.query(`update purchase_order set po_date=$2, delivery_date=$3 where id=$1`, [po.id, iso(daysAgo(Math.max(wo.age - 3, 4))), iso(daysAgo(Math.max(wo.age - 18, 2)))]);
+        await receiveAndBill(po, wo, i, E, loc);
+      } else if (j === 1 && i === 0) {
+        // approved but not yet delivered, past due date -> shows as delayed material
+        await submitPoForApproval(po.id, E.pe.id);
+        const a = await one(`select * from approval where entity_id=$1 and status='PENDING'`, [po.id]);
+        await decideApproval(a.id, true, "OK", { id: a.approver_role === "MD" ? E.md.id : a.approver_role === "BUSINESS_HEAD" ? E.bhp.id : E.pm_pur.id, roleCode: a.approver_role });
+        await pool.query(`update purchase_order set po_date=$2, delivery_date=$3 where id=$1`, [po.id, iso(daysAgo(25)), iso(daysAgo(6))]);
       } else if (j === 1) await submitPoForApproval(po.id, E.pe.id);
     }
     // direct site/factory costs
     const extra: [string, string, number][] = wo.v === "MFG"
-      ? [["FABRICATION", "Markal: SS plates issued from stores", 1650000], ["SUBCONTRACT", "Pickling & passivation – subcontract", 52000], ["FREIGHT", "Inward freight – plates", 18000]]
+      ? [["SUBCONTRACT", "Pickling & passivation – subcontract", 52000], ["FREIGHT", "Inward freight – plates", 18000]]
       : wo.v === "OM" ? [["LABOUR", "Operator wages (contract) – Aug–Oct", 354000], ["MATERIAL", "Consumables & chemicals", 61000], ["TRAVEL", "Supervisor travel", 22000]]
       : [["SITE_EXP", "Site lodging & DA – erection team", 64000], ["FREIGHT", "Freight – blowers & pumps", 38000], ["SUBCONTRACT", "Civil touch-up & grouting", 85000], ["TRAVEL", "PM site visits", 21000]];
     for (const [k, [cat, desc, amt]] of extra.entries())
@@ -381,6 +418,9 @@ async function main() {
     }
   }
 
+  // ---------- Manufacturing jobs, stores, dispatch (needs WOs) ----------
+  await seedJobsAndStores(E, loc, wos);
+
   // ---------- DWRs with WO hours (labour costing) ----------
   const { submitDwr } = await import("../src/lib/hr");
   const woByV = Object.fromEntries(wos.map((w) => [w.v, w]));
@@ -391,7 +431,9 @@ async function main() {
     for (const [k, v, desc] of workers) {
       const wo = woByV[v];
       if (!wo) continue;
-      await submitDwr(E[k].id, iso(d), `${desc} for ${wo.wo_no}`, back % 6 === 0 ? "Awaiting drawing approval for nozzle orientation" : "", [{ woId: wo.id, hours: 7 + Math.floor(rnd() * 3), description: desc }]);
+      const job = ["fw1", "fw2", "ps"].includes(k) ? await one(`select id, wo_id, job_no from job_order where status <> 'NEW' order by (status='IN_PROGRESS') desc, job_no offset $1 limit 1`, [(back + k.length) % 4]) : null;
+      await submitDwr(E[k].id, iso(d), `${desc} for ${wo.wo_no}`, back % 6 === 0 ? "Awaiting drawing approval for nozzle orientation" : "",
+        [{ woId: job?.wo_id ?? wo.id, jobId: job?.id ?? null, hours: 7 + Math.floor(rnd() * 3), description: job ? `${job.job_no} · ${desc}` : desc }]);
     }
   }
   await pool.query(`update cost_entry ce set entry_date = d.report_date, created_at = d.report_date from dwr_line dl join dwr d on d.id=dl.dwr_id where ce.source_type='DWR' and ce.source_id=dl.id`);
@@ -405,6 +447,7 @@ async function main() {
   await ins("leave_request", { employee_id: E.se1.id, leave_type: "CL", from_date: iso(daysAgo(-5)), to_date: iso(daysAgo(-6)), days: 2, reason: "Family function", approver_id: E.sm.id });
   await ins("leave_request", { employee_id: E.fw1.id, leave_type: "SL", from_date: iso(daysAgo(-1)), to_date: iso(daysAgo(-1)), days: 1, reason: "Medical", approver_id: E.ps.id });
 
+  await seedPeopleOps(E, loc, wos, C, leads);
   await pool.query(`update audit_log set at = now() - (random() * interval '120 days') where action <> 'LOGIN_OTP'`);
   console.log("Seed complete. Login as MD with mobile 9800000001 (OTP shown on screen in dev).");
 }

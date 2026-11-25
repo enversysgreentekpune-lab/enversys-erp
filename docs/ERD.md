@@ -67,3 +67,19 @@ erDiagram
 ## Phase 2/3 entities (planned, not yet in schema)
 
 `RFQ, VendorQuote, GRN, VendorBill, Payment, Inventory, StockTransaction, JobOrder, JobStage, JobCard, Drawing, DrawingRevision, InspectionRequest, InspectionReport, NCR, Dispatch, DispatchDocument, ICReport, Certificate, OMContract, Asset, PMSchedule, ServiceCall, ConsultancyPO, Deliverable, Shift, Payroll, ExpenseClaim (today: cost_entry with source EXPENSE_CLAIM), Contractor/ContractLabour, BG/EMD`. Each attaches to `work_order` and posts its costs to `cost_entry`, so the P&L spine does not change.
+
+## Release 2 additions (migration `003_operations.sql`)
+
+| Area | Tables / columns |
+|---|---|
+| Project codes | `work_order.wo_no` is the **Project Code** (`ENV/PC/26-27/0001`); `work_order.order_kind` = PO (supply, EPC, manufacturing, trading) or SO (O&M, maintenance, I&C, consultancy); `wo_spec_line.project_item_code` (`ENV/PC/26-27/0001-03`) |
+| Proposal flow | `site_visit_report` (+ photos as `attachment` with entity `site_visit`); `customer_po.order_kind` |
+| Manufacturing | `job_order` (job no., project code, project item code, category TANK / SKID / OTHER / OWC_SKID / CONTROL_PANEL, weight, stage, %, budget), `dwr_line.job_id` (manpower per job), `cost_entry.job_id` |
+| Stores | `item.material_group` (MS/SS sheets, welding rods, grinding wheels, PPE, paint …), `item.unit_weight_kg`, `stock_txn` (opening, GRN, issue, adjust) |
+| Purchase | `grn`, `grn_line` (challan no./date, vehicle, evidence), `vendor_bill`, `vendor_payment` |
+| Dispatch | `dispatch`, `dispatch_line` (+ photos, delivery challan, e-way bill, invoice and client-received copy as attachments with `doc_type`) |
+| Accounts | `invoice.milestone_id`, `milestone.achieved_note`; `v_wo_pnl` adds `order_kind`, `gst_billed`, `total_billed`, `received_total` |
+| People | `employee_location` (last check-in/out or login position), `task` extensions (kind GENERAL / DAILY / FIELD_SERVICE, client contact, service report, manager approval, client OTP, evidence count), `task_template` (daily tasks), `task_update` (timeline) |
+| Approvals | `approval.approver_id` and `approval.step` (expense claims: reporting manager, then accounts head) |
+
+Cost rule unchanged: each `cost_entry` has exactly one cost centre (a project code, office admin or factory admin). Material issued to a job, labour hours on a job, vendor bills, freight on dispatch and approved expense claims all post there.

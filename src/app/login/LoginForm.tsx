@@ -27,7 +27,7 @@ export default function LoginForm() {
       <div className="mb-4 grid grid-cols-2 rounded-lg bg-slate-100 p-1 text-sm dark:bg-slate-800">
         {(["otp", "pin"] as const).map((m) => (
           <button key={m} onClick={() => { setMode(m); setStep(m === "pin" ? "code" : "mobile"); setCode(""); setMsg(null); }}
-            className={`rounded-md py-1.5 ${mode === m ? "bg-white font-medium shadow dark:bg-slate-900" : "text-slate-500"}`}>{m === "otp" ? "Mobile OTP" : "Quick PIN"}</button>
+            className={`rounded-md py-1.5 ${mode === m ? "bg-white font-medium text-brand-700 shadow-sm dark:bg-slate-900" : "text-slate-500"}`}>{m === "otp" ? "Mobile OTP" : "Quick PIN"}</button>
         ))}
       </div>
       <label className="label" htmlFor="mobile">Mobile number</label>
@@ -43,7 +43,7 @@ export default function LoginForm() {
           <input id="code" inputMode="numeric" autoComplete="one-time-code" maxLength={mode === "otp" ? 6 : 4} value={code} autoFocus
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => e.key === "Enter" && verify()}
             className="input text-center text-lg tracking-[0.5em]" type={mode === "pin" ? "password" : "text"} />
-          {devCode && mode === "otp" && <p className="mt-1 text-xs text-amber-600">Demo OTP: <b>{devCode}</b></p>}
+          {devCode && mode === "otp" && <p className="mt-1 text-xs text-brand-700">Demo OTP: <b>{devCode}</b></p>}
         </div>
       )}
       {msg && <p className={`mt-3 text-sm ${msg.ok ? "text-emerald-600" : "text-rose-600"}`}>{msg.text}</p>}

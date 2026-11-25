@@ -1,7 +1,9 @@
 // OTP delivery providers. Configure OTP_PROVIDER = console | msg91 | twilio
-export async function sendOtpSms(mobile: string, code: string): Promise<void> {
+export async function sendOtpSms(mobile: string, code: string, purpose: "login" | "service" = "login"): Promise<void> {
   const provider = process.env.OTP_PROVIDER ?? "console";
-  const msg = `${code} is your Enversys login OTP. Valid for 5 minutes. Do not share it with anyone.`;
+  const msg = purpose === "service"
+    ? `${code} is your OTP to confirm completion of Enversys service work. Share it with our engineer only if the work is complete.`
+    : `${code} is your Enversys login OTP. Valid for 5 minutes. Do not share it with anyone.`;
   if (provider === "msg91") {
     const r = await fetch("https://control.msg91.com/api/v5/otp", {
       method: "POST",
@@ -21,5 +23,5 @@ export async function sendOtpSms(mobile: string, code: string): Promise<void> {
     if (!r.ok) throw new Error(`Twilio error ${r.status}`);
     return;
   }
-  console.log(`[OTP] ${mobile}: ${code}`);
+  console.log(`[OTP${purpose === "service" ? "-CLIENT" : ""}] ${mobile}: ${code}`);
 }

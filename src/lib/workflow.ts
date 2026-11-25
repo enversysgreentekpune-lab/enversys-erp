@@ -24,6 +24,18 @@ export const stageProb = (s: string) => LEAD_STAGES.find((x) => x.code === s)?.p
 export const stageLabel = (s: string) => LEAD_STAGES.find((x) => x.code === s)?.label ?? s;
 
 export class BizError extends Error {}
+
+/** Project Item Code = Project Code + line number, e.g. ENV/PC/26-27/0003-02 */
+export const projectItemCode = (projectCode: string, sl: number) => `${projectCode}-${String(sl).padStart(2, "0")}`;
+export const JOB_CATEGORIES = [["TANK", "Tanks"], ["SKID", "Skid & Assembly"], ["OTHER", "Other Jobs"], ["OWC_SKID", "OWC Skid & Assembly"], ["CONTROL_PANEL", "Control Panels"]] as const;
+export function jobCategory(text: string): string {
+  const t = text.toLowerCase();
+  if (/owc|organic waste/.test(t)) return "OWC_SKID";
+  if (/panel|plc|mcc|pcc/.test(t)) return "CONTROL_PANEL";
+  if (/tank|vessel|receiver|silo/.test(t)) return "TANK";
+  if (/skid|assembly|frame/.test(t)) return "SKID";
+  return "OTHER";
+}
 const ROLE_RANK: Record<string, number> = { SALES_MANAGER: 1, PURCHASE_MANAGER: 1, PROJECT_MANAGER: 1, HR_MANAGER: 1, ACCOUNTS_MANAGER: 1, BUSINESS_HEAD: 2, MD: 3, SUPER_ADMIN: 3 };
 export const canApproveAs = (userRole: string, approverRole: string) =>
   userRole === approverRole || (ROLE_RANK[userRole] ?? 0) > (ROLE_RANK[approverRole] ?? 0);
@@ -170,7 +182,9 @@ export async function decideApproval(approvalId: string, approve: boolean, remar
   return tx(async (c) => {
     const a = await one(`select * from approval where id=$1 for update`, [approvalId], c);
     if (!a || a.status !== "PENDING") throw new BizError("Approval is not pending");
-    if (!canApproveAs(actor.roleCode, a.approver_role)) throw new BizError(`Requires ${a.approver_role} approval`);
+    if (a.approver_id) {
+      if (a.approver_id !== actor.id && !["MD", "SUPER_ADMIN"].includes(actor.roleCode)) throw new BizError("This approval is assigned to the employee's reporting manager");
+    } else if (!canApproveAs(actor.roleCode, a.approver_role)) throw new BizError(`Requires ${a.approver_role} approval`);
     if (!approve && !remarks?.trim()) throw new BizError("Remarks are required when rejecting");
     await c.query(`update approval set status=$2, decided_by=$3, decided_at=now(), remarks=$4 where id=$1`, [approvalId, approve ? "APPROVED" : "REJECTED", actor.id, remarks || null]);
     if (a.entity === "proposal") {
@@ -190,8 +204,16 @@ export async function decideApproval(approvalId: string, approve: boolean, remar
       }
     }
     if (a.entity === "cost_entry") {
-      const ce = await one(`update cost_entry set status=$2 where id=$1 returning created_by, amount`, [a.entity_id, approve ? "POSTED" : "REJECTED"], c);
-      await notify([ce?.created_by], `Expense claim ${approve ? "approved" : "rejected"}`, `₹${Math.round(ce?.amount ?? 0).toLocaleString("en-IN")} ${remarks ?? ""}`, "/expenses", c);
+      const ce = await one(`select * from cost_entry where id=$1`, [a.entity_id], c);
+      if (approve && a.step === 1) {
+        // step 2: accounts head
+        await c.query(`insert into approval(entity, entity_id, doc_type, approver_role, requested_by, value, step) values ('cost_entry',$1,'EXPENSE_CLAIM','ACCOUNTS_MANAGER',$2,$3,2)`, [a.entity_id, a.requested_by, a.value]);
+        await notify([ce.created_by], "Expense claim approved by manager", `₹${Math.round(ce.amount).toLocaleString("en-IN")} — now with Accounts`, "/expenses", c);
+        await notify(await idsByRole(["ACCOUNTS_MANAGER"], c), "Expense claim for accounts approval", `₹${Math.round(ce.amount).toLocaleString("en-IN")} — ${ce.description}`, "/approvals", c);
+      } else {
+        await c.query(`update cost_entry set status=$2 where id=$1`, [a.entity_id, approve ? "POSTED" : "REJECTED"]);
+        await notify([ce.created_by], `Expense claim ${approve ? "approved" : "rejected"}`, `₹${Math.round(ce.amount).toLocaleString("en-IN")} ${remarks ?? ""}`, "/expenses", c);
+      }
     }
     await audit(actor.id, approve ? "APPROVE" : "REJECT", a.entity, a.entity_id, { status: "PENDING" }, { status: approve ? "APPROVED" : "REJECTED", remarks }, c);
   });
@@ -239,8 +261,8 @@ export async function markWon(proposalId: string, inp: WonInput, actorId: string
     const costs = await q(`select * from cost_line where revision_id=$1`, [rev.id], c);
     const t = rev.totals ?? {};
 
-    const cpo = await one(`insert into customer_po(proposal_id, customer_id, po_no, po_date, po_value, agreed_changes, attachment_id, created_by) values ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,
-      [proposalId, p.customer_id, inp.poNo.trim(), inp.poDate, inp.poValue, inp.agreedChanges || null, inp.attachmentId ?? null, actorId], c);
+    const cpo = await one(`insert into customer_po(proposal_id, customer_id, po_no, po_date, po_value, agreed_changes, attachment_id, created_by, order_kind) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *`,
+      [proposalId, p.customer_id, inp.poNo.trim(), inp.poDate, inp.poValue, inp.agreedChanges || null, inp.attachmentId ?? null, actorId, ["OM", "MAINTENANCE", "IC", "CONSULTANCY"].includes(inp.woType) ? "SO" : "PO"], c);
     const woNo = await nextNo(c, "WORK_ORDER");
     const hasFab = spec.some((s) => s.is_fabricated) || costs.some((x) => x.category === "FABRICATION");
     const budget = Number(t.totalCost ?? 0);
@@ -256,10 +278,20 @@ export async function markWon(proposalId: string, inp: WonInput, actorId: string
       if (Number(t[key]) > 0) await c.query(`insert into wo_budget_line(wo_id, category, description, amount) values ($1,$2,'Provision',$3)`, [woId, cat, t[key]]);
     // Frozen material spec with unit budget cost
     const lineCost = new Map<number, number>((t.lines ?? []).map((l: any) => [l.sl, l.cost]));
-    for (const s of spec)
-      await c.query(`insert into wo_spec_line(wo_id, sl, item_code, description, specification, make, moc, size_rating, standard, qty, uom, drawing_ref, is_fabricated, unit_cost)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-        [woId, s.sl, s.item_code, s.description, s.specification, s.make, s.moc, s.size_rating, s.standard, s.qty, s.uom, s.drawing_ref, s.is_fabricated, Math.round(((lineCost.get(s.sl) ?? 0) / Number(s.qty || 1)) * 100) / 100]);
+    for (const s of spec) {
+      const pic = projectItemCode(woNo, s.sl);
+      const wsl = await one(`insert into wo_spec_line(wo_id, sl, item_code, description, specification, make, moc, size_rating, standard, qty, uom, drawing_ref, is_fabricated, unit_cost, project_item_code)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning id`,
+        [woId, s.sl, s.item_code, s.description, s.specification, s.make, s.moc, s.size_rating, s.standard, s.qty, s.uom, s.drawing_ref, s.is_fabricated, Math.round(((lineCost.get(s.sl) ?? 0) / Number(s.qty || 1)) * 100) / 100, pic], c);
+      // Fabrication scope -> Markal job order per item, carrying Project Code + Project Item Code
+      if (s.is_fabricated) {
+        const item = s.item_code ? await one(`select unit_weight_kg from item where code=$1`, [s.item_code], c) : null;
+        await c.query(`insert into job_order(job_no, wo_id, wo_spec_line_id, project_item_code, category, title, qty, uom, weight_kg, budget_cost, target_date, created_by)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          [await nextNo(c, "JOB"), woId, wsl!.id, pic, jobCategory(`${s.item_code ?? ""} ${s.description}`), s.description, s.qty, s.uom,
+            Math.round(Number(item?.unit_weight_kg ?? 0) * Number(s.qty) * 1000) / 1000, Math.round((lineCost.get(s.sl) ?? 0) * 100) / 100, inp.endDate || null, actorId]);
+      }
+    }
     // Payment milestones from standard template (editable on WO)
     const ms: [string, number][] = inp.woType === "OM" ? Array.from({ length: 12 }, (_, i) => [`O&M billing – month ${i + 1}`, 100 / 12] as [string, number]) : [["Advance with PO", 30], ["Against proforma before dispatch", 60], ["After commissioning", 10]];
     const start = new Date(inp.startDate || inp.poDate);

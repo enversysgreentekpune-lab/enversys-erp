@@ -44,3 +44,50 @@
 ## Super Admin / MD — administration
 - **Roles & permissions**: per role, set the scope (Own / Team / Vertical / Company) for each module × action. Changes take effect on the user's next page load.
 - **Approval matrix**, **Masters** (including location geofences and shifts), **Templates** (upload new Word/Excel versions; a template that fails a test render is rejected), **Settings** (alert thresholds), **Audit log**.
+
+## Release 2 — new screens
+
+**Clients:** the top of the Clients screen shows total, active and new clients this month and year, plus proposals submitted in the last 45 days.
+
+**Leads and proposals:** only the Director sees every lead and proposal. Everyone else sees the ones assigned to them or created by them. Approvers can open a proposal they are asked to approve. The proposal page shows the full path: cost sheet → submission → site visit (add a report with photos under *Site visit*) → revision → won → PO/SO copy → project code. The creator or the Director can reassign a proposal under *Approvals & assignment*.
+
+**Project code:** every won order gets a project code, e.g. `ENV/PC/26-27/0003`. Each item gets a project item code, e.g. `ENV/PC/26-27/0003-02`. Upload the customer's PO/SO copy on the project page if it was not attached when the order was won. Supply and project orders are listed under *Projects (PO)*. O&M, maintenance, I&C and consultancy orders are under *Service Orders (SO)*.
+
+**Purchase and store:**
+- **Record a receipt:** open an approved PO and use *Record material receipt*. Enter the quantity received and accepted, the challan number and date, and attach photos. Accepted material goes into stock at the chosen store.
+- **Bills and payments:** Accounts enters the vendor bill and payments on the same page. *Bill receipts* shows paid and unpaid.
+- **Store screen:** shows stock, low stock (below reorder level), delayed material (past the PO delivery date) and receipts with challans.
+- **Issue to jobs:** the *Issue to jobs* tab charges material to a Markal job and its project code.
+
+**Manufacturing (Markal):**
+- **Jobs:** won orders with fabrication create one job per item: tanks, skids, OWC skids, control panels or other.
+- **Progress:** update the stage and % on the *Jobs & costing* tab.
+- **Manpower:** under *Daily manpower*, deploy each worker on the jobs they work on today. This is their daily report, and their hours are costed to the job.
+- **Costs:** each job's cost is material issued + labour + electricity + site admin. Electricity and site admin are charged at an hourly rate based on normal factory capacity.
+
+**Dispatch:**
+- **Item register:** pick a project to see its items: ordered, purchased, received, manufactured and dispatched.
+- **Create a dispatch:** attach the loading photos, delivery challan, e-way bill and invoice.
+- **Delivery:** when the client signs, mark it delivered and upload the client's received copy.
+
+**Accounts and SO:** *Accounts* shows billed, unbilled, GST billed, GST received and GST not received per project. Raise invoices against milestones and record receipts there. *Service Orders* lists the due list. Mark a service milestone achieved; Accounts then bills it.
+
+**Employees:** the Employees screen covers daily and monthly attendance, the live location map and leave approvals. Locations come from geo check-in/out and from the app after login, if the employee allows location.
+
+**Tasks:**
+- **Daily tasks:** they appear automatically each working day. Create them as *Daily* tasks.
+- **Completing a task:** complete every task with a short report, and attach photos or documents as evidence.
+- **Transferring a task:** give a reason when you transfer it.
+- **Field service:**
+  1. The engineer submits a service report.
+  2. Their manager approves it.
+  3. The report is emailed to the client, and a 6-digit OTP goes to the client's mobile and email.
+  4. The engineer enters the client's OTP to close the task.
+
+  Every step also sends an email update.
+
+**Expenses:** an expense claim goes first to your reporting manager, then to the accounts head.
+
+**Performance:** the matrix scores each person from tasks completed, on time, with evidence, daily reports and attendance. Download any employee's report as Excel.
+
+**Field employees** (site engineers, O&M technicians, I&C engineers) see only *My Attendance*, *My Tasks* and *My Expenses*.

@@ -33,6 +33,21 @@
 | 27 | Global search | `/search` | all (scoped) | ✅ |
 | 28 | Notifications | `/notifications` | all | ✅ |
 | 29 | Profile — devices/sessions, remote logout, PIN | `/profile` | all | ✅ |
-| — | Markal job orders, production board, job cards, inspection, NCR, dispatch documents | | | 🔜 Phase 2 |
+| 30 | Client dashboard — total, new this month / year, active clients, proposals submitted recently | `/customers` | sales, MD | ✅ |
+| 31 | Lead stepper (lead received → customer register → lead details → proposal → won) | `/leads/[id]` | assigned person, MD | ✅ |
+| 32 | Proposal stepper (cost sheet → submission → site visit → revision → PO/WO win → PO/SO copy → project code), site visit reports with photos, assignment | `/proposals/[id]` | creator / assignee, MD | ✅ |
+| 33 | Purchase dashboard — project-wise budget vs PO vs received vs billed vs paid; PO register; material receipt register; bill receipts (paid / unpaid) | `/purchase` | purchase, accounts | ✅ |
+| 34 | PO page — record material receipt (GRN) with challan & photos, vendor bills, payments | `/purchase/[id]` | stores, purchase, accounts | ✅ |
+| 35 | Store dashboard — material & stock register by location, low stock, receipts with challans & evidence, issue to jobs, delayed material, bills | `/store` | stores, purchase, factory | ✅ |
+| 36 | Manufacturing dashboard — jobs by category (tanks, skids, other, OWC skids, control panels), manpower available & deployed today by project code, material cost by type, electricity & site admin, tonnage & items vs cost | `/manufacturing` | factory, MD | ✅ |
+| 37 | Dispatch dashboard — projects dispatched / pending, project item register (ordered, purchased, received, manufactured, dispatched), dispatch challans with photos, e-way bill, invoice and client received copy | `/dispatch` | dispatch, PM, MD | ✅ |
+| 38 | Accounts dashboard — billed, unbilled as per PO/SO, GST billed / received / not received, outstanding; invoices & receipts; raise invoice | `/accounts` | accounts, MD | ✅ |
+| 39 | SO dashboard — won service orders, completed / in progress, due list, service milestones → achieved → billed → unbilled → GST | `/so` | managers, accounts | ✅ |
+| 40 | Employee management — daily & monthly attendance breakdown, live location map with Google Maps links, leave approvals | `/employees` | HR, time office, managers | ✅ |
+| 41 | Task management — assigned, completed, pending, lapsed; team summary; new task / field service / daily task | `/tasks` | everyone | ✅ |
+| 42 | Task page — evidence, completion report, transfer, service report → manager approval → report & OTP to client → OTP sign-off, email updates | `/tasks/[id]` | assignee, manager | ✅ |
+| 43 | Performance matrix with per-employee Excel report | `/performance` | managers, HR, MD | ✅ |
+| 44 | Directors dashboard — six KPI lines (sales, orders, procurement, people & admin, manufacturing cost, jobs) for any period | `/md` | MD | ✅ |
+| — | Inspection & NCR, RFQ / comparative statement, e-invoice & e-way bill API, Tally, payroll | | | 🔜 later |
 | — | I&C, O&M contracts & assets, maintenance service calls, consultancy, trading | | | 🔜 Phase 3 |
 | — | Payroll, payslips, full finance (AR/AP, BG/EMD, cash flow), Tally, WhatsApp, scheduled MIS | | | 🔜 Phase 3 |

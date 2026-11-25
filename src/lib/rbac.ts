@@ -7,11 +7,13 @@ export const MODULES = [
   { code: "purchase", name: "Purchase Orders" },
   { code: "work_orders", name: "Work Orders / Projects" },
   { code: "manufacturing", name: "Manufacturing (Markal)" },
+  { code: "stores", name: "Stores & Material" },
   { code: "inspection", name: "Inspection & Dispatch" },
   { code: "field_services", name: "I&C / O&M / Maintenance" },
   { code: "finance", name: "Finance" },
   { code: "hr", name: "HR" },
   { code: "attendance", name: "Time Office / Attendance" },
+  { code: "tasks", name: "Tasks & Performance" },
   { code: "office_admin", name: "Office Admin Expenses" },
   { code: "factory_admin", name: "Factory Admin Expenses" },
   { code: "settings", name: "Settings / Roles / Masters" },
@@ -48,41 +50,45 @@ const FULL = "vcedaxs";
 // Base grants every employee gets (self-service)
 const BASE: RoleMatrix = {
   work_orders: ["v", "own"], manufacturing: ["v", "own"], field_services: ["v", "own"],
-  hr: ["v", "own"], attendance: ["vc", "own"], office_admin: ["c", "own"],
+  hr: ["v", "own"], attendance: ["vc", "own"], office_admin: ["c", "own"], tasks: ["vce", "own"],
 };
+/** Field staff see only their own attendance, tasks and expense claims */
+export const FIELD_ROLES = ["SITE_ENGINEER", "OM_TECHNICIAN", "IC_ENGINEER"];
+const FIELD_BASE: RoleMatrix = { hr: ["v", "own"], attendance: ["vc", "own"], office_admin: ["c", "own"], tasks: ["vce", "own"] };
+const MGR_TASKS: Grant = ["vcea", "team"];
 
 // Default matrix (spec §3.3) — editable afterwards from Admin → Roles & Permissions
 export const DEFAULT_MATRIX: Record<string, RoleMatrix> = {
   SUPER_ADMIN: Object.fromEntries(MODULES.map((m) => [m.code, [FULL, "company"]])) as RoleMatrix,
   MD: Object.fromEntries(MODULES.map((m) => [m.code, [FULL, "company"]])) as RoleMatrix,
   BUSINESS_HEAD: {
-    dashboard_md: ["vx", "dept"], customers: [FULL, "dept"], leads: [FULL, "dept"], costing: [FULL, "dept"],
+    dashboard_md: ["vx", "dept"], customers: [FULL, "dept"], leads: [["vcedxs", "own"], ["a", "company"]], costing: [FULL, "dept"], tasks: MGR_TASKS, stores: ["v", "company"],
     purchase: ["vax", "dept"], work_orders: [FULL, "dept"], manufacturing: ["vx", "company"], inspection: ["vx", "company"],
     field_services: [FULL, "dept"], finance: ["vx", "dept"], hr: ["v", "team"], attendance: [["v", "team"], ["c", "own"]],
     office_admin: [["v", "company"], ["c", "own"]], factory_admin: ["v", "company"],
   },
-  SALES_MANAGER: { customers: [["vx", "company"], ["ce", "team"]], leads: ["vcedaxs", "team"], costing: ["vce", "team"] },
+  SALES_MANAGER: { customers: [["vx", "company"], ["ce", "team"]], leads: [["vcedxs", "own"], ["a", "company"]], costing: ["vce", "own"], tasks: MGR_TASKS },
   SALES_ENGINEER: { customers: [["v", "company"], ["ce", "own"]], leads: ["vcexs", "own"], costing: ["vce", "own"] },
-  ESTIMATION_ENGINEER: { customers: ["v", "company"], leads: [["v", "company"], ["ce", "own"]], costing: ["vce", "company"] },
-  PURCHASE_MANAGER: { customers: ["v", "company"], leads: ["v", "company"], costing: ["v", "company"], purchase: [FULL, "company"], work_orders: ["v", "company"], manufacturing: ["v", "company"] },
-  PURCHASE_EXEC: { customers: ["v", "company"], costing: ["v", "company"], purchase: ["vcexs", "company"], work_orders: ["v", "company"] },
+  ESTIMATION_ENGINEER: { customers: ["v", "company"], leads: ["vcexs", "own"], costing: ["vce", "own"] },
+  PURCHASE_MANAGER: { customers: ["v", "company"], costing: ["v", "company"], purchase: [FULL, "company"], work_orders: ["v", "company"], manufacturing: ["v", "company"], stores: ["vx", "company"], tasks: MGR_TASKS },
+  PURCHASE_EXEC: { customers: ["v", "company"], costing: ["v", "company"], purchase: ["vcexs", "company"], work_orders: ["v", "company"], stores: ["v", "company"] },
   PROJECT_MANAGER: {
     customers: ["v", "company"], leads: ["v", "own"], costing: ["v", "own"], purchase: ["vc", "own"],
     work_orders: [FULL, "own"], manufacturing: ["vc", "own"], inspection: [FULL, "own"], field_services: [FULL, "own"],
-    finance: ["v", "own"], hr: ["v", "team"], attendance: [["v", "team"], ["c", "own"]],
+    finance: ["v", "own"], hr: ["v", "team"], attendance: [["v", "team"], ["c", "own"]], tasks: MGR_TASKS, stores: ["v", "company"],
   },
-  SITE_ENGINEER: { work_orders: ["ve", "own"], inspection: ["vc", "own"], field_services: ["vce", "own"] },
+  SITE_ENGINEER: {},
   FACTORY_MANAGER: {
     purchase: ["vc", "company"], work_orders: ["v", "company"], manufacturing: [FULL, "company"], inspection: ["vc", "company"],
-    finance: ["v", "own"], hr: ["v", "team"], attendance: [["v", "team"], ["ce", "team"]], factory_admin: [FULL, "company"],
+    finance: ["v", "own"], hr: ["v", "team"], attendance: [["v", "team"], ["ce", "team"]], factory_admin: [FULL, "company"], tasks: MGR_TASKS, stores: ["vce", "company"],
   },
-  PRODUCTION_SUPERVISOR: { manufacturing: ["vce", "team"], inspection: ["vc", "team"], attendance: ["v", "team"] },
+  PRODUCTION_SUPERVISOR: { manufacturing: ["vce", "company"], inspection: ["vc", "team"], attendance: ["v", "team"], tasks: MGR_TASKS, stores: ["vc", "company"] },
   QA_INSPECTOR: { work_orders: ["v", "company"], manufacturing: ["v", "company"], inspection: ["vcexs", "company"] },
-  IC_ENGINEER: { field_services: ["vce", "own"] },
-  OM_MANAGER: { customers: ["v", "company"], work_orders: ["v", "dept"], field_services: [FULL, "dept"], hr: ["v", "team"], attendance: ["v", "team"] },
+  IC_ENGINEER: {},
+  OM_MANAGER: { customers: ["v", "company"], work_orders: ["v", "dept"], field_services: [FULL, "dept"], hr: ["v", "team"], attendance: ["v", "team"], tasks: MGR_TASKS },
   CONSULTANT: { work_orders: ["v", "own"] },
   ACCOUNTS_MANAGER: {
-    dashboard_md: ["v", "company"], customers: ["vx", "company"], leads: ["v", "company"], costing: ["v", "company"], purchase: ["vx", "company"],
+    dashboard_md: ["v", "company"], customers: ["vx", "company"], costing: ["v", "company"], purchase: ["vx", "company"], stores: ["v", "company"], tasks: MGR_TASKS,
     work_orders: ["vx", "company"], manufacturing: ["v", "company"], inspection: ["v", "company"], field_services: ["v", "company"],
     finance: [FULL, "company"], hr: ["vex", "company"], attendance: ["vx", "company"],
     office_admin: [FULL, "company"], factory_admin: [FULL, "company"],
@@ -91,11 +97,11 @@ export const DEFAULT_MATRIX: Record<string, RoleMatrix> = {
     customers: ["v", "company"], purchase: ["v", "company"], work_orders: ["v", "company"], finance: ["vcex", "company"],
     hr: ["v", "company"], office_admin: ["vcex", "company"], factory_admin: ["vcex", "company"],
   },
-  HR_MANAGER: { hr: [FULL, "company"], attendance: [FULL, "company"], office_admin: [["vcex", "company"]] },
+  HR_MANAGER: { hr: [FULL, "company"], attendance: [FULL, "company"], office_admin: [["vcex", "company"]], tasks: ["vceax", "company"] },
   TIME_OFFICE: { hr: ["v", "company"], attendance: ["vcex", "company"] },
   ADMIN_EXEC: { office_admin: ["vce", "company"], attendance: ["v", "own"] },
-  STOREKEEPER: { purchase: ["v", "company"], work_orders: ["v", "company"], manufacturing: ["v", "company"] },
-  DISPATCH_INCHARGE: { work_orders: ["v", "company"], inspection: ["vce", "company"] },
+  STOREKEEPER: { purchase: ["vc", "company"], work_orders: ["v", "company"], manufacturing: ["v", "company"], stores: ["vcex", "company"] },
+  DISPATCH_INCHARGE: { work_orders: ["v", "company"], inspection: ["vcexs", "company"], stores: ["v", "company"] },
 };
 
 export type PermMap = Record<string, Scope>; // key `${module}:${action}`
@@ -112,7 +118,7 @@ export function expandMatrix(roleCode: string): PermMap {
         }
     }
   };
-  add(BASE);
+  add(FIELD_ROLES.includes(roleCode) ? FIELD_BASE : BASE);
   add(DEFAULT_MATRIX[roleCode] ?? {});
   return out;
 }

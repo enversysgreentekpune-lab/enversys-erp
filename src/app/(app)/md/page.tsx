@@ -4,7 +4,9 @@ import { q, one } from "@/lib/db";
 import { resolveFrame, compareRange, type Frame, iso, fyStartYear } from "@/lib/period";
 import { inr, num, pct, dt, label } from "@/lib/format";
 import { salesKpis, pipeline, funnel, lossReasons, byDimension, leaderboard, woPortfolio, finance, monthlyTrend, adminVsBudget, hrSnapshot, attendanceRange, mdAlerts, topOpportunities } from "@/lib/queries";
-import { PageHeader, Card, Stat, Badge, Table, Tabs, Progress, Empty } from "@/components/ui";
+import { PageHeader, Card, Stat, Badge, Table, Tabs, Progress, Empty, KpiLine } from "@/components/ui";
+import { directorLines } from "@/lib/queries";
+import { JOB_CATEGORIES } from "@/lib/workflow";
 import { FrameBar } from "@/components/FrameBar";
 import { Bars, Donut, Trend, Funnel } from "@/components/charts";
 import { stageLabel } from "@/lib/workflow";
@@ -53,22 +55,18 @@ export default async function MdDashboard({ searchParams }: { searchParams: Prom
         subtitle={<>Company command centre · <b>{range.label}</b>{cmp && <> · compared {cmp.label.toLowerCase()}</>}{scope === "dept" && <> · {u.verticalName} vertical</>}</>} />
       <FrameBar verticals={verticals} exportHref="/api/export/md" />
 
-      {/* KPI strip */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat label="Order booking" value={money(sales.booking.v)} sub={`${sales.booking.n} orders`} delta={delta(sales.booking.v, salesPrev?.booking.v)} href="/work-orders" />
-        <Stat label="Revenue (invoiced)" value={money(fin.revenue)} delta={delta(fin.revenue, finPrev?.revenue)} href={`${base}&tab=finance`} />
-        <Stat label="Collections" value={money(fin.collections)} delta={delta(fin.collections, finPrev?.collections)} href={`${base}&tab=finance`} />
-        <Stat label="Receivables" value={money(fin.receivables)} sub={<span className="text-rose-600">{money(fin.over90)} &gt; 90 d</span>} tone={fin.over90 > 0 ? "amber" : undefined} href={`${base}&tab=finance`} />
-        <Stat label="Payables (committed)" value={money(fin.committed)} href="/purchase" />
-        <Stat label="Gross margin (live WOs)" value={pct(grossMarginPct)} tone={grossMarginPct < 10 ? "red" : "green"} href={`${base}&tab=projects`} />
-        <Stat label="Net profit (period)" value={money(netProfit)} tone={netProfit < 0 ? "red" : "green"} sub="revenue − direct − overheads" href={`${base}&tab=finance`} />
-        <Stat label="Open order book" value={money(openOrderBook)} sub={`${live.length} live WOs`} href="/work-orders" />
-        <Stat label="Pipeline (weighted)" value={money(pipe.weighted)} sub={`${pipe.count} open · ${money(pipe.total)} gross`} href="/leads?open=1" />
-        <Stat label="Win ratio (value)" value={pct(sales.winRateValue)} sub={`${pct(sales.winRateCount, 0)} by count`} href={`${base}&tab=sales`} />
-        <Stat label="Headcount" value={num(hc?.n)} href={`${base}&tab=hr`} />
-        <Stat label="Overdue tasks / escalations" value={`${alerts.overdueTasks.n} / ${alerts.overdueTasks.esc}`} tone={alerts.overdueTasks.n ? "red" : "green"} href="/me" />
-      </div>
-
+      <DirectorLines range={range} fyFrom={`${fyStartYear(new Date())}-04-01`} f={f} money={money} />
+      <details className="mb-4 mt-4">
+        <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Finance & sales KPIs</summary>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <Stat label="Revenue (invoiced)" value={money(fin.revenue)} delta={delta(fin.revenue, finPrev?.revenue)} href={`${base}&tab=finance`} />
+          <Stat label="Collections" value={money(fin.collections)} delta={delta(fin.collections, finPrev?.collections)} href={`${base}&tab=finance`} />
+          <Stat label="Receivables" value={money(fin.receivables)} sub={<span className="text-rose-600">{money(fin.over90)} &gt; 90 d</span>} href={`${base}&tab=finance`} />
+          <Stat label="Gross margin (live orders)" value={pct(grossMarginPct)} tone={grossMarginPct < 10 ? "red" : "green"} href={`${base}&tab=projects`} />
+          <Stat label="Open order book" value={money(openOrderBook)} sub={`${live.length} live`} href="/work-orders" />
+          <Stat label="Pipeline (weighted)" value={money(pipe.weighted)} sub={`win ratio ${pct(sales.winRateValue, 0)}`} href="/leads?open=1" />
+        </div>
+      </details>
       <Tabs tabs={TABS} active={tab} base={base} />
       {tab === "overview" && <Overview {...{ range, sales, fin, alerts, wos: live, money, f }} />}
       {tab === "sales" && <Sales {...{ range, sales, f, money, pipe }} />}
@@ -157,7 +155,7 @@ async function Sales({ range, sales, f, money, pipe }: any) {
 function WoTable({ wos, money, compact }: { wos: any[]; money: (v: number) => string; compact?: boolean }) {
   if (!wos.length) return <Empty>No work orders</Empty>;
   return (
-    <Table head={compact ? ["WO", "Customer", "Progress", "Value", "Budget vs actual", "Margin q/est", "RAG"] : ["WO", "Type", "Customer", "PM", "Progress", "Contract", "Billed", "Received", "Budget", "Actual+Commit", "Margin quoted / est.", "Next milestone", "Schedule", "Cost"]}>
+    <Table head={compact ? ["Project code", "Client", "Progress", "Value", "Budget vs actual", "Margin q/est", "RAG"] : ["Project code", "Type", "Client", "PM", "Progress", "Contract", "Billed", "Received", "Budget", "Actual+Commit", "Margin quoted / est.", "Next milestone", "Schedule", "Cost"]}>
       {wos.map((w) => (
         <tr key={w.id}>
           <td><Link className="link font-medium" href={`/work-orders/${w.id}`}>{w.wo_no}</Link><div className="max-w-[220px] truncate text-xs text-slate-500">{w.title}</div></td>
@@ -306,6 +304,62 @@ async function Finance({ range, fin, money }: any) {
         <Card title="Vertical-wise contribution (all WOs)" bodyClass="p-0"><Table head={["Vertical", "Contract", "Billed", "Est. margin"]}>{vert.map((v) => <tr key={v.name}><td>{v.name}</td><td className="num">{money(v.contract)}</td><td className="num">{money(v.billed)}</td><td className="num">{money(v.margin)}</td></tr>)}</Table></Card>
       </div>
       <p className="text-xs text-slate-500">Cash/bank balance, BG/EMD exposure, cash-flow & fund-flow statements and Tally sync arrive with Finance (Phase 3).</p>
+    </div>
+  );
+}
+
+async function DirectorLines({ range, fyFrom, f, money }: { range: any; fyFrom: string; f: any; money: (v: number) => string }) {
+  const { l1, l2, l3, l4, l5, l6 } = await directorLines(range, fyFrom, f);
+  const actual = Number(l5.material) + Number(l5.consumables) + Number(l5.manpower) + Number(l5.electricity) + Number(l5.factory_other);
+  const cat = (c: string) => l6.find((x: any) => x.category === c) ?? { done: 0, wip: 0, pending: 0 };
+  return (
+    <div className="space-y-3">
+      <KpiLine title="Sales" cols={5}>
+        <Stat label="Active customers" value={l1.active_customers} href="/customers" />
+        <Stat label="Active leads" value={l1.active_leads} href="/leads?open=1" />
+        <Stat label="Won leads" value={l1.won_leads} sub={range.label} href="/leads?stage=WON" />
+        <Stat label="Won PO amount" value={money(l1.won_amount)} sub={range.label} href="/work-orders" />
+        <Stat label="Won PO — year to date" value={money(l1.won_ytd)} sub="FY till today" />
+      </KpiLine>
+      <KpiLine title="Orders">
+        <Stat label="Total POs" value={l2.po_total} sub={money(l2.po_value)} href="/work-orders" />
+        <Stat label="POs completed" value={l2.po_done} tone="green" />
+        <Stat label="POs ongoing" value={l2.po_ongoing} />
+        <Stat label="Total SOs" value={l2.so_total} sub={money(l2.so_value)} href="/so" />
+        <Stat label="SOs completed" value={l2.so_done} tone="green" />
+        <Stat label="SOs ongoing" value={l2.so_ongoing} />
+      </KpiLine>
+      <KpiLine title="Procurement" cols={4}>
+        <Stat label="Procurement POs raised" value={money(l3.raised)} sub={`${l3.raised_n} POs · ${range.label}`} href="/purchase" />
+        <Stat label="Payment done" value={money(l3.paid)} tone="green" href="/purchase?tab=bills" />
+        <Stat label="Due payment" value={money(l3.due)} tone={Number(l3.due) > 0 ? "amber" : undefined} href="/purchase?tab=bills" />
+        <Stat label="Delayed POs" value={l3.delayed} tone={l3.delayed ? "red" : undefined} href="/store?tab=delayed" />
+      </KpiLine>
+      <KpiLine title="People & admin" cols={4}>
+        <Stat label="Total employees" value={l4.total} href="/employees" />
+        <Stat label="Present today" value={l4.present} sub={`${l4.total ? Math.round((l4.present / l4.total) * 100) : 0}% attendance`} tone="green" href="/employees" />
+        <Stat label="Employee expenses (month)" value={money(l4.emp_exp_month)} href="/expenses" />
+        <Stat label="Admin expenses" value={money(l4.admin)} sub={`office ${money(l4.office)} · factory ${money(l4.factory)}`} href="/expenses" />
+      </KpiLine>
+      <KpiLine title="Manufacturing cost">
+        <Stat label="Manufactured value (cost sheet)" value={money(l5.budget)} sub={`${l5.jobs} jobs`} href="/manufacturing" />
+        <Stat label="Material" value={money(l5.material)} />
+        <Stat label="Manpower" value={money(l5.manpower)} />
+        <Stat label="Electricity" value={money(l5.electricity)} />
+        <Stat label="Consumables" value={money(l5.consumables)} sub="rods, wheels, PPE, paint" />
+        <Stat label="Total actual vs cost sheet" value={money(actual)} sub={`${Number(l5.budget) ? Math.round((actual / Number(l5.budget)) * 100) : 0}% of cost sheet`} tone={actual > Number(l5.budget) ? "red" : "green"} />
+      </KpiLine>
+      <KpiLine title="Jobs" cols={5}>
+        {JOB_CATEGORIES.map(([c, n]) => (
+          <Link key={c} href={`/manufacturing?tab=jobs&cat=${c}`} className="card block px-3.5 py-3 hover:border-brand-600">
+            <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-slate-500">{n}</div>
+            <div className="mt-1 grid grid-cols-2 gap-1">
+              <div><div className="font-display text-lg font-bold text-brand-700">{cat(c).done}</div><div className="text-[10px] text-slate-500">Completed</div></div>
+              <div><div className="font-display text-lg font-bold text-navy-900 dark:text-slate-100">{cat(c).wip}</div><div className="text-[10px] text-slate-500">In progress</div></div>
+            </div>
+          </Link>
+        ))}
+      </KpiLine>
     </div>
   );
 }

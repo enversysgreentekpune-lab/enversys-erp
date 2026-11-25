@@ -25,6 +25,14 @@ export async function nearestLocation(lat: number, lng: number) {
   return best as (Record<string, any> & { distance: number }) | null;
 }
 
+/** Last known position of an employee (check-in/out or the ping sent when the app is opened after login) */
+export async function saveLocation(employeeId: string, lat: number, lng: number, source = "PING", accuracy?: number | null) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) throw new BizError("Invalid location");
+  await pool.query(`insert into employee_location(employee_id, lat, lng, accuracy_m, source, at) values ($1,$2,$3,$4,$5,now())
+    on conflict (employee_id) do update set lat=excluded.lat, lng=excluded.lng, accuracy_m=excluded.accuracy_m, source=excluded.source, at=now()`,
+    [employeeId, lat, lng, accuracy == null ? null : Math.round(accuracy), source]);
+}
+
 export async function geoCheck(employeeId: string, kind: "IN" | "OUT", lat: number, lng: number, selfieKey?: string | null) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new BizError("Location not available. Enable GPS and try again.");
   const loc = await nearestLocation(lat, lng);
@@ -42,6 +50,7 @@ export async function geoCheck(employeeId: string, kind: "IN" | "OUT", lat: numb
       on conflict (employee_id, att_date) do update set check_in = coalesce(attendance.check_in, excluded.check_in), location_id = excluded.location_id,
         in_lat = coalesce(attendance.in_lat, excluded.in_lat), in_lng = coalesce(attendance.in_lng, excluded.in_lng), status='P'
       returning *`, [employeeId, date, loc.id, lat, lng, loc.distance, selfieKey ?? null, late]);
+    await saveLocation(employeeId, lat, lng, "CHECK_IN");
     await audit(employeeId, "CHECK_IN", "attendance", r!.id, null, { location: loc.code, distance: loc.distance });
     return { ...r, locationName: loc.name };
   }
@@ -51,11 +60,12 @@ export async function geoCheck(employeeId: string, kind: "IN" | "OUT", lat: numb
   const ot = Math.max(0, Math.round((hours - 9) * 2) / 2);  // OT beyond 9 h in 0.5 h steps
   const status = hours < 4.5 ? "HD" : "P";
   const r = await one(`update attendance set check_out=now(), out_lat=$2, out_lng=$3, ot_hours=$4, status=$5 where id=$1 returning *`, [cur.id, lat, lng, ot, status]);
+  await saveLocation(employeeId, lat, lng, "CHECK_OUT");
   await audit(employeeId, "CHECK_OUT", "attendance", cur.id, null, { hours: hours.toFixed(2), ot });
   return { ...r, locationName: loc.name };
 }
 
-export async function submitDwr(employeeId: string, date: string, summary: string, issues: string, lines: { woId: string | null; hours: number; description: string }[]) {
+export async function submitDwr(employeeId: string, date: string, summary: string, issues: string, lines: { woId: string | null; hours: number; description: string; jobId?: string | null }[]) {
   if (!summary?.trim()) throw new BizError("Summary is required");
   const total = lines.reduce((a, l) => a + Number(l.hours || 0), 0);
   if (total > 16) throw new BizError("Total hours cannot exceed 16 in a day");
@@ -67,10 +77,10 @@ export async function submitDwr(employeeId: string, date: string, summary: strin
     await c.query(`delete from cost_entry where source_type='DWR' and source_id in (select id from dwr_line where dwr_id=$1)`, [d!.id]);
     await c.query(`delete from dwr_line where dwr_id=$1`, [d!.id]);
     for (const l of lines.filter((x) => Number(x.hours) > 0)) {
-      const dl = await one(`insert into dwr_line(dwr_id, wo_id, hours, description) values ($1,$2,$3,$4) returning id`, [d!.id, l.woId || null, l.hours, l.description || null], c);
+      const dl = await one(`insert into dwr_line(dwr_id, wo_id, hours, description, job_id) values ($1,$2,$3,$4,$5) returning id`, [d!.id, l.woId || null, l.hours, l.description || null, l.jobId || null], c);
       if (l.woId && Number(emp.hourly_cost) > 0)
-        await c.query(`insert into cost_entry(cost_centre, wo_id, category, description, amount, entry_date, source_type, source_id, created_by)
-          values ('WO',$1,'LABOUR',$2,$3,$4,'DWR',$5,$6)`, [l.woId, `${emp.name}: ${l.hours} h — ${l.description || "DWR"}`, Math.round(Number(l.hours) * Number(emp.hourly_cost) * 100) / 100, date, dl!.id, employeeId]);
+        await c.query(`insert into cost_entry(cost_centre, wo_id, job_id, category, description, amount, entry_date, source_type, source_id, created_by)
+          values ('WO',$1,$7,'LABOUR',$2,$3,$4,'DWR',$5,$6)`, [l.woId, `${emp.name}: ${l.hours} h — ${l.description || "DWR"}`, Math.round(Number(l.hours) * Number(emp.hourly_cost) * 100) / 100, date, dl!.id, employeeId, l.jobId || null]);
     }
     await audit(employeeId, "SUBMIT", "dwr", d!.id, null, { date, hours: total }, c);
     return d!;

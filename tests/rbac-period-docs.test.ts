@@ -28,11 +28,22 @@ describe("RBAC default matrix", () => {
     expect(scopeOf(p, "work_orders", "view")).toBe("own");
     expect(scopeOf(p, "attendance", "create")).toBe("own");
   });
-  it("business head is scoped to vertical; base grants merge with the widest scope", () => {
+  it("only the MD sees all leads; business heads see their own but can approve any", () => {
     const p = expandMatrix("BUSINESS_HEAD");
-    expect(scopeOf(p, "leads", "approve")).toBe("dept");
+    expect(scopeOf(p, "leads", "view")).toBe("own");
+    expect(scopeOf(p, "leads", "approve")).toBe("company");
     expect(scopeOf(p, "work_orders", "view")).toBe("dept");
+    expect(scopeOf(expandMatrix("MD"), "leads", "view")).toBe("company");
+    for (const r of ["SALES_MANAGER", "SALES_ENGINEER", "ESTIMATION_ENGINEER", "PROJECT_MANAGER"]) expect(scopeOf(expandMatrix(r), "leads", "view")).toBe("own");
+    for (const r of ["PURCHASE_MANAGER", "ACCOUNTS_MANAGER", "FACTORY_WORKER"]) expect(scopeOf(expandMatrix(r), "leads", "view")).toBeNull();
     expect(maxScope("own", "team")).toBe("team");
+  });
+  it("field employees only get attendance, tasks and their own expense claims", () => {
+    for (const r of ["SITE_ENGINEER", "OM_TECHNICIAN", "IC_ENGINEER"]) {
+      const p = expandMatrix(r);
+      expect(Object.keys(p).map((k) => k.split(":")[0]).sort().filter((v, i, a) => a.indexOf(v) === i)).toEqual(["attendance", "hr", "office_admin", "tasks"]);
+      expect(scopeOf(p, "work_orders", "view")).toBeNull();
+    }
   });
 });
 

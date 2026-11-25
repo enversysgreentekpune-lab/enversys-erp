@@ -45,29 +45,7 @@ export async function decideLeaveAction(_: any, fd: FormData) {
   });
 }
 
-export async function taskStatusAction(_: any, fd: FormData) {
-  const u = await requireUser();
-  return safe(async () => {
-    const id = s(fd, "id"), status = s(fd, "status");
-    if (!["TODO", "IN_PROGRESS", "DONE", "CANCELLED"].includes(status)) throw new BizError("Bad status");
-    const t = await one(`update task set status=$3, done_at = case when $3='DONE' then now() else null end where id=$1 and (assigned_to=$2 or created_by=$2) returning id`, [id, u.id, status]);
-    if (!t) throw new BizError("Task not found");
-    await audit(u.id, "STATUS", "task", id, null, { status });
-    revalidatePath("/me");
-  });
-}
-
-export async function createTaskAction(_: any, fd: FormData) {
-  const u = await requireUser();
-  return safe(async () => {
-    const assignee = s(fd, "assigned_to") || u.id;
-    if (assignee !== u.id && !u.teamIds.includes(assignee)) throw new BizError("You can assign tasks only to yourself or your team");
-    await pool.query(`insert into task(title, description, assigned_to, created_by, due_at, priority) values ($1,$2,$3,$4,$5,$6)`,
-      [s(fd, "title"), s(fd, "description") || null, assignee, u.id, s(fd, "due") || null, s(fd, "priority") || "MEDIUM"]);
-    revalidatePath("/me");
-    return { ok: true, message: "Task created" };
-  });
-}
+// Task status changes now go through src/app/actions/tasks.ts (completion requires a report; field service needs client OTP).
 
 export async function markNotificationsRead() {
   const u = await requireUser();

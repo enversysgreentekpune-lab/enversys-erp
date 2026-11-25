@@ -31,10 +31,13 @@ export async function requestOtp(mobileRaw: string): Promise<{ ok: boolean; mess
   const mobile = normMobile(mobileRaw);
   if (!/^[6-9]\d{9}$/.test(mobile)) return { ok: false, message: "Enter a valid 10-digit Indian mobile number." };
   const { ip } = await reqMeta();
-  const recent = await one<{ n: number }>(
-    `select count(*)::int n from otp_request where (mobile=$1 or ($2::text is not null and ip=$2)) and created_at > now() - interval '15 minutes'`,
+  // Per number: 5 per 15 min. Per IP: 40 per 15 min (an office shares one public IP for all staff).
+  const recent = await one<{ by_mobile: number; by_ip: number }>(
+    `select count(*) filter (where mobile=$1)::int by_mobile, count(*) filter (where $2::text is not null and ip=$2)::int by_ip
+       from otp_request where created_at > now() - interval '15 minutes' and (mobile=$1 or ip=$2)`,
     [mobile, ip]);
-  if ((recent?.n ?? 0) >= OTP_MAX_PER_15MIN) return { ok: false, message: "Too many OTP requests. Please try again in 15 minutes." };
+  if ((recent?.by_mobile ?? 0) >= OTP_MAX_PER_15MIN || (recent?.by_ip ?? 0) >= OTP_MAX_PER_15MIN * 8)
+    return { ok: false, message: "Too many OTP requests. Please try again in 15 minutes." };
   const emp = await one(`select id from employee where mobile=$1 and is_active`, [mobile]);
   if (!emp) {
     await audit(null, "OTP_REQUEST_UNREGISTERED", "auth", null, null, { mobile });

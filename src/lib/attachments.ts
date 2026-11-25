@@ -22,7 +22,7 @@ export async function saveAttachment(opts: {
       (prev?.v ?? 0) + 1, opts.docType ?? null, opts.userId ?? null], db))!;
 }
 
-export async function saveUploads(files: File[], o: { entity: string; entityId: string; folder?: string; userId: string; db?: Db }) {
+export async function saveUploads(files: File[], o: { entity: string; entityId: string; folder?: string; userId: string; db?: Db; docType?: string }) {
   const out = [];
   for (const f of files) {
     if (!f || typeof f === "string" || f.size === 0) continue;

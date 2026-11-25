@@ -2,8 +2,8 @@ import type { Db } from "./db";
 import { fyCode } from "./period";
 
 export const SERIES: Record<string, string> = {
-  CUSTOMER: "ENV/CU", LEAD: "ENV/ENQ", PROPOSAL: "ENV/QT", WORK_ORDER: "ENV/WO", PR: "ENV/PR",
-  PO: "ENV/PO", JOB: "MKL/JO", INVOICE: "ENV/INV", CUSTOMER_PO: "ENV/CPO",
+  CUSTOMER: "ENV/CU", LEAD: "ENV/ENQ", PROPOSAL: "ENV/QT", WORK_ORDER: "ENV/PC", PR: "ENV/PR",
+  PO: "ENV/PO", JOB: "MKL/JO", GRN: "ENV/GRN", DISPATCH: "ENV/DC", SVR: "ENV/SVR", INVOICE: "ENV/INV", CUSTOMER_PO: "ENV/CPO",
 };
 
 export function formatDocNo(prefix: string, fy: string, n: number) {

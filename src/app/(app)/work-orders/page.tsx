@@ -11,7 +11,7 @@ export default async function WorkOrders({ searchParams }: { searchParams: Promi
   const u = await requirePage("work_orders");
   const sp = await searchParams;
   const p: unknown[] = [];
-  const w = [woScope(u, "view", p)];
+  const w = [woScope(u, "view", p), `w.order_kind='PO'`];
   if (sp.type) { p.push(sp.type); w.push(`w.wo_type=$${p.length}`); }
   if (sp.status) { p.push(sp.status); w.push(`w.status=$${p.length}`); }
   if (sp.q) { p.push(`%${sp.q}%`); w.push(`(w.wo_no ilike $${p.length} or w.title ilike $${p.length} or c.name ilike $${p.length})`); }
@@ -21,7 +21,7 @@ export default async function WorkOrders({ searchParams }: { searchParams: Promi
   const money = fin || !!can(u, "work_orders", "edit");
   return (
     <div>
-      <PageHeader title="Work orders" subtitle="Every cost is booked against a WO — the master cost centre" actions={<a className="btn-secondary" href="/api/export/work-orders">Export Excel</a>} />
+      <PageHeader title="Projects (PO)" subtitle="Supply, EPC, manufacturing and trading orders. The project code is the master cost centre; service orders are under SO." actions={<a className="btn-secondary" href="/api/export/work-orders">Export Excel</a>} />
       <form className="card mb-4 flex flex-wrap gap-2 p-3">
         <input name="q" defaultValue={sp.q} placeholder="Search WO, title, customer" className="input max-w-xs" />
         <select name="type" defaultValue={sp.type ?? ""} className="input w-44"><option value="">All types</option>{WO_TYPES.map((t) => <option key={t} value={t}>{label(t)}</option>)}</select>
@@ -29,7 +29,7 @@ export default async function WorkOrders({ searchParams }: { searchParams: Promi
         <button className="btn-secondary">Filter</button>
       </form>
       <Card bodyClass="p-0">
-        {rows.length ? <Table head={["WO", "Type", "Customer", "PM", "Start → End", "Progress", ...(money ? ["Contract"] : []), ...(fin ? ["Budget", "Actual+Commit", "Est. margin"] : []), "Schedule", "Cost"]}>
+        {rows.length ? <Table head={["Project code", "Type", "Customer", "PM", "Start → End", "Progress", ...(money ? ["Contract"] : []), ...(fin ? ["Budget", "Actual+Commit", "Est. margin"] : []), "Schedule", "Cost"]}>
           {rows.map((w) => (
             <tr key={w.id}>
               <td><Link className="link font-medium" href={`/work-orders/${w.id}`}>{w.wo_no}</Link><div className="max-w-[240px] text-xs text-slate-500">{w.title}</div>{w.has_fabrication && <Badge tone="purple">Markal</Badge>}</td>

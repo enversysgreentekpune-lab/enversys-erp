@@ -72,7 +72,10 @@ describe("lead → proposal → won → WO → purchase → costs", async () => 
     const wo = await markWon(proposalId, { poNo: "4500999999", poDate: "2026-11-01", poValue: 500000, woType: "PROJECT", pmId: pm.id, executorIds: [site.id] }, sm.id);
     woId = wo.id;
     const rev = await one(`select totals from proposal_revision where proposal_id=$1 and rev_no=0`, [proposalId]);
-    expect(wo.wo_no).toMatch(/^ENV\/WO\//);
+    expect(wo.wo_no).toMatch(/^ENV\/PC\/\d{2}-\d{2}\/\d{4}$/);   // project code
+    const job = await one(`select * from job_order where wo_id=$1`, [woId]);
+    expect(job.category).toBe("SKID");
+    expect(job.project_item_code).toBe(`${wo.wo_no}-02`);
     expect(Number(wo.budget_cost)).toBeCloseTo(rev.totals.totalCost, 2);
     expect(wo.has_fabrication).toBe(true);
     const bsum = await one(`select sum(amount) s from wo_budget_line where wo_id=$1`, [woId]);
