@@ -27,6 +27,14 @@ The repo has a `render.yaml` blueprint. In Render choose **New → Blueprint**, 
 - Free-tier limits: the web service sleeps after about 15 minutes idle (first load then takes about a minute), the free database expires after 30 days, and uploaded/generated files are lost when the service restarts. Quote templates fall back to the bundled defaults in `templates/`.
 - Before real use: switch to paid plans, add a persistent disk (mounted at `storage/`) or S3, set `DEMO_MODE=false`, configure `OTP_PROVIDER=msg91` and SMTP, and replace the demo data with real users.
 
+## Custom domain: app.enversys.com
+The public website stays on www.enversys.com (Hostinger). The app runs on the subdomain **app.enversys.com**.
+1. Render → the `enversys-erp` web service → **Settings → Custom Domains → Add** `app.enversys.com`. Render shows a target like `enversys-erp.onrender.com`.
+2. Hostinger hPanel → **Domains → enversys.com → DNS / Nameservers → DNS records → Add record**: type **CNAME**, name **app**, target the Render address from step 1, TTL default. Do not change the existing `@` or `www` records — they serve the website.
+3. Back in Render click **Verify**. The HTTPS certificate is issued automatically (usually within 30 minutes of DNS propagating).
+4. Optional: on the website add a **Login** button linking to `https://app.enversys.com`.
+If the domain's nameservers point somewhere other than Hostinger (for example Cloudflare), add the same CNAME there; on Cloudflare set it to **DNS only** (grey cloud) until Render has issued the certificate.
+
 ## Hosting options
 - **Vercel + Supabase**: works for the app, but local-disk storage is not persistent on Vercel. Use the S3/Supabase Storage driver first.
 - **Single VM / container (simplest)**: `npm ci && npm run build && npm start` behind nginx, with Postgres managed separately and a mounted volume for `storage/`.

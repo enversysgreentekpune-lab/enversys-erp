@@ -37,3 +37,6 @@ services:
         value: console
       - key: STORAGE_DIR
         value: ./storage
+      # Public address of the app (custom domain on Render; CNAME app -> <service>.onrender.com in Hostinger DNS)
+      - key: APP_URL
+        value: https://app.enversys.com
