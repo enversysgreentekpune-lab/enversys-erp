@@ -10,7 +10,8 @@ import { nextNo } from "../src/lib/numbering";
 import { createProposal, saveRevision, submitForApproval, decideApproval, setProposalStatus, markWon, changeLeadStage, submitPoForApproval } from "../src/lib/workflow";
 import { DEFAULT_PARAMS } from "../src/lib/costing";
 import { iso } from "../src/lib/period";
-import { receiveAndBill, seedJobsAndStores, seedPeopleOps } from "./seed-ops";
+import { receiveAndBill, seedJobsAndStores, seedPeopleOps, seedRequisitions } from "./seed-ops";
+import { seedIcOm } from "./seed-icom";
 
 let seed = 42;
 const rnd = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);
@@ -87,7 +88,7 @@ async function main() {
   const E: Record<string, any> = {};
   const emp = async (key: string, name: string, mobile: string, roleCode: string, d: string, des: string, l: string, mgr: string | null, opts: Record<string, any> = {}) => {
     E[key] = await ins("employee", {
-      emp_code: `ENV${String(Object.keys(E).length + 1).padStart(3, "0")}`, name, mobile, email: `${name.split(" ")[0].toLowerCase()}@enversys.com`,
+      emp_code: `ENV${String(Object.keys(E).length + 1).padStart(3, "0")}`, name, mobile, email: opts.email ?? `${name.split(" ")[0].toLowerCase()}@enversys.com`,
       role_id: role[roleCode].id, department_id: dept[d].id, designation_id: desig[des].id, location_id: loc[l].id,
       manager_id: mgr ? E[mgr].id : null, doj: iso(daysAgo(200 + Math.floor(rnd() * 2000))), monthly_ctc: opts.ctc ?? 60000,
       hourly_cost: opts.hourly ?? 400, vertical_id: opts.v ? vert[opts.v].id : null, skills: opts.skills ?? [],
@@ -120,6 +121,11 @@ async function main() {
   await emp("to", "Balasaheb Ghule", "9800000025", "TIME_OFFICE", "HR", "Executive", "MKL", "hr", { ctc: 30000 });
   await emp("adm", "Kavita Salunkhe", "9800000026", "ADMIN_EXEC", "HR", "Executive", "HO", "hr", { ctc: 32000 });
   await emp("store", "Mahesh Lokhande", "9800000027", "STOREKEEPER", "STORES", "Executive", "MKL", "fm", { ctc: 30000 });
+  // O&M team: supervisors see the all-sites dashboard; field operators file the daily site report
+  for (const [k, name, mobile] of [["omsc", "Sankalp Chahal", "9800000028"], ["omvm", "Vidya Murkute", "9800000029"], ["omrc", "Rashika Chavan", "9800000030"], ["omap", "Akshay Pawar", "9800000031"], ["omaj", "Akshay Jagdale", "9800000032"]] as const)
+    await emp(k, name, mobile, "OM_SUPERVISOR", "OM", "Supervisor", "SITE-SNR", "om", { v: "OM", ctc: 48000, hourly: 300, email: `${name.toLowerCase().replace(" ", ".")}@enversys.com` });
+  for (const [i, name] of ["Ganesh Shinde", "Sagar Patil", "Nilesh Jadhav", "Vishal More", "Rahul Kale", "Sunil Pawar", "Amit Bhosale", "Deepak Gaikwad", "Yogesh Mane", "Pravin Kadam"].entries())
+    await emp(`op${i + 1}`, name, `98000000${33 + i}`, "OM_OPERATOR", "OM", "Technician", "SITE-SNR", ["omsc", "omvm", "omrc", "omap", "omaj"][Math.floor(i / 2)], { v: "OM", ctc: 22000, hourly: 140, email: `${name.toLowerCase().replace(" ", ".")}@enversys.com` });
   console.log(`Employees: ${Object.keys(E).length}`);
 
   // ---------- Vendors & items ----------
@@ -448,6 +454,8 @@ async function main() {
   await ins("leave_request", { employee_id: E.fw1.id, leave_type: "SL", from_date: iso(daysAgo(-1)), to_date: iso(daysAgo(-1)), days: 1, reason: "Medical", approver_id: E.ps.id });
 
   await seedPeopleOps(E, loc, wos, C, leads);
+  await seedRequisitions(E);
+  await seedIcOm(E, C);
   await pool.query(`update audit_log set at = now() - (random() * interval '120 days') where action <> 'LOGIN_OTP'`);
   console.log("Seed complete. Login as MD with mobile 9800000001 (OTP shown on screen in dev).");
 }

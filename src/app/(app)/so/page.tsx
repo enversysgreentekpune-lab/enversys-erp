@@ -8,7 +8,7 @@ import { PageHeader, Card, Table, Badge, Stat, Tabs, Empty, Progress } from "@/c
 import { ActionForm } from "@/components/ActionForm";
 import { milestoneAchievedAction, invoiceAction } from "@/app/actions/ops";
 
-export const metadata = { title: "Service Orders" };
+export const metadata = { title: "Work Orders (services)" };
 
 export default async function SoDashboard({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const u = await requireUser();
@@ -33,7 +33,7 @@ export default async function SoDashboard({ searchParams }: { searchParams: Prom
   const tabs = [{ key: "list", label: `All service orders (${sos.length})` }, { key: "due", label: `Due list (${due.length})` }, { key: "milestones", label: "Service milestones" }];
   return (
     <div>
-      <PageHeader title="Service Orders (SO)" subtitle="O&M, maintenance, I&C and consultancy orders: service milestones → achieved → billed → unbilled → GST" />
+      <PageHeader title="Work Orders (WO)" subtitle="O&M, maintenance, I&C and consultancy orders: service milestones → achieved → billed → unbilled → GST" />
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
         <Stat label="Won SOs" value={sos.length} />
         <Stat label="In progress" value={ongoing.length} />

@@ -2,7 +2,7 @@ import { requireUser, can, logout } from "@/lib/auth";
 import { one } from "@/lib/db";
 import { Shell, type NavItem } from "@/components/Shell";
 import { redirect } from "next/navigation";
-import { FIELD_ROLES } from "@/lib/rbac";
+import { FIELD_ROLES, OM_FIELD_ROLES } from "@/lib/rbac";
 import { approvableRoles } from "@/lib/access";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -18,6 +18,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     add("", "/me", "My Attendance", "me");
     add("", "/tasks", "My Tasks", "tasks");
     add("", "/expenses?tab=claims", "My Expenses", "expenses");
+    if (OM_FIELD_ROLES.includes(u.roleCode)) add("", "/om", "My O&M Site", "om");
+    if (["IC_ENGINEER", "SITE_ENGINEER"].includes(u.roleCode)) add("", "/ic", "My I&C Projects", "ic");
   } else {
     add("Overview", "/me", "My Dashboard", "me");
     if (can(u, "dashboard_md", "view")) add("Overview", "/md", u.roleCode === "MD" ? "Directors Dashboard" : "Executive Dashboard", "md");
@@ -28,13 +30,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       add("Sales", "/leads/stats", "Sales Analytics", "stats");
     }
     if (wide(can(u, "work_orders", "view")) || can(u, "work_orders", "edit")) {
-      add("Operations", "/work-orders", "Projects (PO)", "wo");
-      add("Operations", "/so", "Service Orders (SO)", "so");
+      add("Operations", "/work-orders", "Projects (PO & Supply)", "wo");
+      add("Operations", "/so", "Work Orders (WO)", "so");
     }
     if (can(u, "purchase", "view")) add("Operations", "/purchase", "Purchase", "purchase");
     if (can(u, "stores", "view")) add("Operations", "/store", "Store", "store");
     if (wide(can(u, "manufacturing", "view"))) add("Operations", "/manufacturing", "Manufacturing", "mfg");
     if (can(u, "inspection", "view")) add("Operations", "/dispatch", "Dispatch", "dispatch");
+    if (wide(can(u, "field_services", "view")) || wide(can(u, "inspection", "view"))) add("Operations", "/ic", "Installation & Commissioning", "ic");
+    if (can(u, "field_services", "view")) add("Operations", "/om", "O&M Operations", "om");
     if (can(u, "finance", "view")) add("Operations", "/accounts", "Accounts", "accounts");
     if (wide(can(u, "attendance", "view")) || wide(can(u, "hr", "view"))) add("People", "/employees", "Employees", "employees");
     add("People", "/tasks", "Tasks", "tasks");

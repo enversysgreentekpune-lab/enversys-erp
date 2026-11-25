@@ -43,7 +43,7 @@ const STATUS_TONE: Record<string, string> = {
   LOST: "red", REJECTED: "red", A: "red", FAILED: "red", CANCELLED: "gray", DROPPED: "gray", REGRETTED: "gray", ON_HOLD: "gray",
   DRAFT: "gray", PENDING_APPROVAL: "purple", PENDING: "purple", TODO: "blue", IN_PROGRESS: "amber", KICKOFF: "blue",
   CRITICAL: "red", HIGH: "amber", MEDIUM: "blue", LOW: "gray", L: "purple", HD: "amber", OD: "blue", WO: "gray", H: "gray",
-  RED: "red", AMBER: "amber", GREEN: "green",
+  RED: "red", AMBER: "amber", GREEN: "green", NOT_STARTED: "gray", HANDOVER_PENDING: "purple", OPEN: "red", RESOLVED: "green", CLOSED: "gray", FULFILLED: "green", NORMAL: "green", ISSUE: "amber", SHUTDOWN: "red",
 };
 export function Badge({ children, tone, status }: { children?: ReactNode; tone?: keyof typeof TONES; status?: string }) {
   const t = tone ?? (status ? STATUS_TONE[status] ?? "gray" : "gray");

@@ -35,7 +35,7 @@ export const ROLES: { code: string; name: string }[] = [
   ["PURCHASE_MANAGER", "Purchase Manager"], ["PURCHASE_EXEC", "Purchase Executive"], ["PROJECT_MANAGER", "Project Manager"],
   ["SITE_ENGINEER", "Executor / Site Engineer"], ["FACTORY_MANAGER", "Factory Manager"], ["PRODUCTION_SUPERVISOR", "Production Supervisor"],
   ["FACTORY_WORKER", "Factory Worker"], ["QA_INSPECTOR", "QA/QC Inspector"], ["IC_ENGINEER", "I&C Engineer"],
-  ["OM_MANAGER", "O&M Manager"], ["OM_TECHNICIAN", "O&M Technician"], ["CONSULTANT", "Consultant"],
+  ["OM_MANAGER", "O&M Manager"], ["OM_SUPERVISOR", "O&M Supervisor"], ["OM_TECHNICIAN", "O&M Technician"], ["OM_OPERATOR", "O&M Field Operator"], ["CONSULTANT", "Consultant"],
   ["ACCOUNTS_MANAGER", "Accounts Manager"], ["ACCOUNTANT", "Accountant"], ["HR_MANAGER", "HR Manager"],
   ["TIME_OFFICE", "Time Office Keeper"], ["ADMIN_EXEC", "Admin Executive"], ["STOREKEEPER", "Storekeeper"],
   ["DISPATCH_INCHARGE", "Dispatch In-charge"], ["EMPLOYEE", "Employee (basic)"],
@@ -53,7 +53,9 @@ const BASE: RoleMatrix = {
   hr: ["v", "own"], attendance: ["vc", "own"], office_admin: ["c", "own"], tasks: ["vce", "own"],
 };
 /** Field staff see only their own attendance, tasks and expense claims */
-export const FIELD_ROLES = ["SITE_ENGINEER", "OM_TECHNICIAN", "IC_ENGINEER"];
+export const FIELD_ROLES = ["SITE_ENGINEER", "OM_TECHNICIAN", "OM_OPERATOR", "IC_ENGINEER"];
+/** Field roles that also get the operator daily-reporting screens for their own O&M site */
+export const OM_FIELD_ROLES = ["OM_TECHNICIAN", "OM_OPERATOR"];
 const FIELD_BASE: RoleMatrix = { hr: ["v", "own"], attendance: ["vc", "own"], office_admin: ["c", "own"], tasks: ["vce", "own"] };
 const MGR_TASKS: Grant = ["vcea", "team"];
 
@@ -77,15 +79,18 @@ export const DEFAULT_MATRIX: Record<string, RoleMatrix> = {
     work_orders: [FULL, "own"], manufacturing: ["vc", "own"], inspection: [FULL, "own"], field_services: [FULL, "own"],
     finance: ["v", "own"], hr: ["v", "team"], attendance: [["v", "team"], ["c", "own"]], tasks: MGR_TASKS, stores: ["v", "company"],
   },
-  SITE_ENGINEER: {},
+  SITE_ENGINEER: { field_services: ["vce", "own"] },
   FACTORY_MANAGER: {
     purchase: ["vc", "company"], work_orders: ["v", "company"], manufacturing: [FULL, "company"], inspection: ["vc", "company"],
     finance: ["v", "own"], hr: ["v", "team"], attendance: [["v", "team"], ["ce", "team"]], factory_admin: [FULL, "company"], tasks: MGR_TASKS, stores: ["vce", "company"],
   },
   PRODUCTION_SUPERVISOR: { manufacturing: ["vce", "company"], inspection: ["vc", "team"], attendance: ["v", "team"], tasks: MGR_TASKS, stores: ["vc", "company"] },
   QA_INSPECTOR: { work_orders: ["v", "company"], manufacturing: ["v", "company"], inspection: ["vcexs", "company"] },
-  IC_ENGINEER: {},
-  OM_MANAGER: { customers: ["v", "company"], work_orders: ["v", "dept"], field_services: [FULL, "dept"], hr: ["v", "team"], attendance: ["v", "team"], tasks: MGR_TASKS },
+  IC_ENGINEER: { field_services: ["vce", "own"] },
+  OM_TECHNICIAN: { field_services: ["vc", "own"] },
+  OM_OPERATOR: { field_services: ["vc", "own"] },
+  OM_SUPERVISOR: { customers: ["v", "company"], field_services: [["vcexs", "company"], ["a", "company"]], attendance: ["v", "team"], hr: ["v", "team"], tasks: MGR_TASKS },
+  OM_MANAGER: { customers: ["v", "company"], work_orders: ["v", "dept"], field_services: [FULL, "company"], hr: ["v", "team"], attendance: ["v", "team"], tasks: MGR_TASKS },
   CONSULTANT: { work_orders: ["v", "own"] },
   ACCOUNTS_MANAGER: {
     dashboard_md: ["v", "company"], customers: ["vx", "company"], costing: ["v", "company"], purchase: ["vx", "company"], stores: ["v", "company"], tasks: MGR_TASKS,

@@ -5,14 +5,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import {
   LayoutDashboard, Gauge, Building2, Target, BarChart3, FileText, Briefcase, ShoppingCart, Clock, Wallet, CheckSquare, Settings, ShieldCheck, Menu, X, Bell,
-  Search, Sun, Moon, LogOut, User, Factory, Warehouse, Truck, Landmark, ClipboardList, Users, ListTodo, Award, Wrench,
+  Search, Sun, Moon, LogOut, User, Factory, Warehouse, Truck, Landmark, ClipboardList, Users, ListTodo, Award, Wrench, HardHat, Droplets,
 } from "lucide-react";
 import { LocationPing } from "./LocationPing";
 
 const ICONS: Record<string, any> = {
   me: LayoutDashboard, md: Gauge, customers: Building2, leads: Target, stats: BarChart3, proposals: FileText, wo: Briefcase, purchase: ShoppingCart,
   attendance: Clock, expenses: Wallet, approvals: CheckSquare, admin: Settings, audit: ShieldCheck, mfg: Factory, store: Warehouse, dispatch: Truck,
-  accounts: Landmark, so: Wrench, employees: Users, tasks: ListTodo, performance: Award, orders: ClipboardList,
+  accounts: Landmark, so: Wrench, ic: HardHat, om: Droplets, employees: Users, tasks: ListTodo, performance: Award, orders: ClipboardList,
 };
 export type NavItem = { href: string; label: string; icon: string; badge?: number; group?: string };
 

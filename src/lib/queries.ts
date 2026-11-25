@@ -206,19 +206,23 @@ export async function directorLines(r: Range, fyFrom: string, f: Filters = {}) {
   const v = f.verticalId ?? null;
   const [l1, l2, l3, l4, l5, l6] = await Promise.all([
     one(`select
-        (select count(distinct c.id)::int from customer c where ($3::uuid is null or c.vertical_id=$3 or exists (select 1 from lead l where l.customer_id=c.id and l.vertical_id=$3))
-           and (exists (select 1 from lead l where l.customer_id=c.id and l.stage = any($4) ) or exists (select 1 from work_order w where w.customer_id=c.id and w.status not in ('CLOSED','CANCELLED')))) active_customers,
+        (select count(*)::int from lead l where l.created_at::date between $1 and $2 and ($3::uuid is null or l.vertical_id=$3)) total_leads,
         (select count(*)::int from lead l where l.stage = any($4) and ($3::uuid is null or l.vertical_id=$3)) active_leads,
         (select count(*)::int from lead l where l.stage='WON' and l.stage_changed_at::date between $1 and $2 and ($3::uuid is null or l.vertical_id=$3)) won_leads,
-        (select coalesce(sum(contract_value),0) from work_order w where w.created_at::date between $1 and $2 and ($3::uuid is null or w.vertical_id=$3)) won_amount,
-        (select coalesce(sum(contract_value),0) from work_order w where w.created_at::date between $5 and current_date and ($3::uuid is null or w.vertical_id=$3)) won_ytd`,
-      [r.from, r.to, v, OPEN_STAGES, fyFrom]),
-    one(`select count(*) filter (where order_kind='PO')::int po_total, count(*) filter (where order_kind='PO' and status in ('COMPLETED','CLOSED'))::int po_done,
-        count(*) filter (where order_kind='PO' and status not in ('COMPLETED','CLOSED','CANCELLED'))::int po_ongoing,
-        count(*) filter (where order_kind='SO')::int so_total, count(*) filter (where order_kind='SO' and status in ('COMPLETED','CLOSED'))::int so_done,
-        count(*) filter (where order_kind='SO' and status not in ('COMPLETED','CLOSED','CANCELLED'))::int so_ongoing,
-        coalesce(sum(contract_value) filter (where order_kind='PO'),0) po_value, coalesce(sum(contract_value) filter (where order_kind='SO'),0) so_value
-      from work_order where status<>'CANCELLED' and ($1::uuid is null or vertical_id=$1)`, [v]),
+        (select coalesce(sum(contract_value),0) from work_order w where w.status<>'CANCELLED' and w.created_at::date between $1 and $2 and ($3::uuid is null or w.vertical_id=$3)) won_amount,
+        (select coalesce(sum(contract_value),0) from work_order w where w.status<>'CANCELLED' and w.order_class='PO' and w.created_at::date between $1 and $2 and ($3::uuid is null or w.vertical_id=$3)) won_po,
+        (select coalesce(sum(contract_value),0) from work_order w where w.status<>'CANCELLED' and w.order_class='SUPPLY' and w.created_at::date between $1 and $2 and ($3::uuid is null or w.vertical_id=$3)) won_so,
+        (select coalesce(sum(contract_value),0) from work_order w where w.status<>'CANCELLED' and w.order_class='WO' and w.created_at::date between $1 and $2 and ($3::uuid is null or w.vertical_id=$3)) won_wo`,
+      [r.from, r.to, v, OPEN_STAGES]),
+    // Orders by class: count, completed, ongoing, value, amount received and amount due (billed, not yet received)
+    q(`select w.order_class cls, count(*)::int total,
+        count(*) filter (where w.status in ('COMPLETED','CLOSED'))::int done,
+        count(*) filter (where w.status not in ('COMPLETED','CLOSED'))::int ongoing,
+        coalesce(sum(w.contract_value),0) value,
+        coalesce(sum(p.received_total),0) received, coalesce(sum(p.total_billed),0) billed,
+        coalesce(sum(greatest(p.total_billed - p.received_total, 0)),0) due,
+        coalesce(sum(greatest(w.contract_value - p.billed, 0)),0) unbilled
+      from work_order w join v_wo_pnl p on p.id=w.id where w.status<>'CANCELLED' and ($1::uuid is null or w.vertical_id=$1) group by 1`, [v]),
     one(`select
         (select coalesce(sum(po.total),0) from purchase_order po join work_order w on w.id=po.wo_id where po.status not in ('DRAFT','PENDING_APPROVAL','CANCELLED') and po.po_date between $1 and $2 and ($3::uuid is null or w.vertical_id=$3)) raised,
         (select count(*)::int from purchase_order po join work_order w on w.id=po.wo_id where po.status not in ('DRAFT','PENDING_APPROVAL','CANCELLED') and po.po_date between $1 and $2 and ($3::uuid is null or w.vertical_id=$3)) raised_n,

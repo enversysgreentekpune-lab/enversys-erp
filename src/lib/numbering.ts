@@ -3,7 +3,7 @@ import { fyCode } from "./period";
 
 export const SERIES: Record<string, string> = {
   CUSTOMER: "ENV/CU", LEAD: "ENV/ENQ", PROPOSAL: "ENV/QT", WORK_ORDER: "ENV/PC", PR: "ENV/PR",
-  PO: "ENV/PO", JOB: "MKL/JO", GRN: "ENV/GRN", DISPATCH: "ENV/DC", SVR: "ENV/SVR", INVOICE: "ENV/INV", CUSTOMER_PO: "ENV/CPO",
+  PO: "ENV/PO", JOB: "MKL/JO", GRN: "ENV/GRN", DISPATCH: "ENV/DC", SVR: "ENV/SVR", OM_TICKET: "ENV/TKT", OM_REQ: "ENV/OMR", INVOICE: "ENV/INV", CUSTOMER_PO: "ENV/CPO",
 };
 
 export function formatDocNo(prefix: string, fy: string, n: number) {

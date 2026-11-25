@@ -165,6 +165,7 @@ export async function createDispatch(woId: string, inp: { lines: { specLineId: s
     if (inp.freight && inp.freight > 0)
       await c.query(`insert into cost_entry(cost_centre, wo_id, category, description, amount, entry_date, source_type, source_id, created_by) values ('WO',$1,'FREIGHT',$2,$3,coalesce($4::date,current_date),'DISPATCH',$5,$6)`,
         [woId, `Freight ${no} · ${inp.vehicleNo}`, inp.freight, inp.date || null, d!.id, actorId]);
+    if (wo.order_class !== "WO") await c.query(`insert into ic_project(wo_id) values ($1) on conflict (wo_id) do nothing`, [woId]); // enters I&C automatically
     const pm = await q(`select employee_id from wo_team where wo_id=$1 and team_role='PM'`, [woId], c);
     await notify([...pm.map((x) => x.employee_id), ...(await idsByRole(["ACCOUNTS_MANAGER"], c))], `Dispatched: ${wo.wo_no}`, `${no} · vehicle ${inp.vehicleNo}`, `/dispatch?project=${woId}`, c);
     await audit(actorId, "CREATE", "dispatch", d!.id, null, { dispatch_no: no, project: wo.wo_no, lines: lines.length }, c);

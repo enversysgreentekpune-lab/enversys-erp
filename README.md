@@ -20,7 +20,9 @@ npm run dev                   # http://localhost:3000 — the OTP is shown on th
 | 9800000022 | Shweta Kulkarni, Accounts | Accounts, SO billing, expense approvals |
 | 9800000024 | Priya Wagh, HR | Employees, live map, performance |
 | 9800000014 | Sachin More, Site Engineer (field) | Field view: attendance and tasks only |
-| 9800000021 | Ajay Thorat, O&M Technician (field) | Field service with client OTP |
+| 9800000021 | Ajay Thorat, O&M Technician (field) | Field service with client OTP; MIDC Ranjangaon O&M site |
+| 9800000028 | Sankalp Chahal, O&M Supervisor | All-sites O&M dashboard, ticket closure, requisition approval (also Vidya Murkute 9800000029, Rashika Chavan 9800000030, Akshay Pawar 9800000031, Akshay Jagdale 9800000032) |
+| 9800000033 | Ganesh Shinde, O&M Field Operator | Daily site report, tickets, spares, requisitions, client reports |
 
 ## Features
 
@@ -40,12 +42,16 @@ npm run dev                   # http://localhost:3000 — the OTP is shown on th
 | 12 | Expenses with proof, approved by reporting manager and then accounts head | Expenses, Approvals |
 | 13 | Performance matrix from daily and assigned tasks with evidence, DWRs and attendance; downloadable per employee | Performance |
 | 14 | Field employees see only attendance and tasks; upload service report; transfer task; email updates; report sent to client after manager approval; client confirms completion with OTP on mobile and email | My Attendance, My Tasks |
-| 15 | Directors dashboard: six KPI lines (sales, orders, procurement, people & admin, manufacturing cost, jobs) for any period | Directors Dashboard |
+| 15 | Directors dashboard: Sales (total, active, won leads, won amount PO + SO + WO) → Purchase orders → Supply orders → Work orders (total, completed, ongoing, received, due) → Procurement → People & admin → Manufacturing cost → Jobs, for any period | Directors Dashboard |
+| 16 | Material control: a project buys only the items on its cost sheet. Anything extra needs an additional material requisition raised by Purchase and approved by a proposal head; on approval a draft PO is created. The stores material register lists received material only | Dispatch → Material requisitions + cost sheet, Material register |
+| 18 | Installation & Commissioning: every dispatched project appears automatically; progress updates with photos and client-signed reports; handover report, handover certificate and appreciation certificate generated as Word files and emailed to the client; the project is completed only when both signed certificates are uploaded | Installation & Commissioning |
+| 19 | O&M field operations: operator daily report (presence, water treated, energy, chemicals, water quality, plant status), spare register, material & service requisitions, operator and client tickets with downloadable resolutions, monthly and site visit reports downloaded or emailed to the client; all-sites dashboard (sites, present manpower, manpower and operation issues, tickets by operator / client, open / closed) for directors and O&M supervisors | O&M Operations, Directors Dashboard |
+| 17 | Consumables (welding rods, grinding wheels, PPE, paint) per job, per project, per month and per financial year | Manufacturing → Consumables |
 
 Also included from the first release: OTP login with PIN and device control, role & permission matrix editor, approval matrix, Word/Excel quote generation and email, revision compare, auto purchase requisition and draft POs, WO budget vs actual, job dossier ZIP, audit log, Excel exports, PWA install.
 
 ## Tests
-`npm test` runs 37 tests against a separate test database. They cover the cost engine, role rules (MD-only lead visibility, field-staff restrictions), FY periods, document templates, the sales-to-project flow, purchase → GRN → bill → payment, stock checks on issue, dispatch and invoice limits, the field-service OTP flow, two-step expenses, daily tasks and the performance score.
+`npm test` runs 43 tests against a separate test database. They cover the cost engine, role rules (MD-only lead visibility, field-staff restrictions), FY periods, document templates, the sales-to-project flow, purchase → GRN → bill → payment, stock checks on issue, dispatch and invoice limits, the field-service OTP flow, cost-sheet material control, I&C handover and completion, O&M daily reports, spares, tickets and requisitions, two-step expenses, daily tasks and the performance score.
 
 ## Launch
 - **Hosting:** `render.yaml` deploys the app and a PostgreSQL database on Render in one step. Any Node 20+ server with PostgreSQL 14+ also works. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

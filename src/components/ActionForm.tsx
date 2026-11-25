@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useEffect, useRef, type ReactNode } from "react";
+import { startTransition, useActionState, useEffect, useRef, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 export type ActionResult = { ok: boolean; error?: string; message?: string; redirect?: string; data?: any } | null;
@@ -21,8 +21,15 @@ export function ActionForm({ action, children, className, submitLabel, submitCla
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
   return (
-    <form ref={ref} action={run} className={className}
-      onSubmit={(e) => { if (confirm && !window.confirm(confirm)) e.preventDefault(); }}>
+    // Submitted via onSubmit (not the form's action attribute) so React does not clear what the user typed
+    // when the server rejects the input; the form is reset only after success when `reset` is set.
+    <form ref={ref} className={className}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (pending || (confirm && !window.confirm(confirm))) return;
+        const fd = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+        startTransition(() => run(fd));
+      }}>
       {children}
       {state?.error && <div className="mt-2 rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-200">{state.error}</div>}
       {state?.ok && state.message && <div className="mt-2 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">{state.message}</div>}

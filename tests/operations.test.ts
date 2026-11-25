@@ -158,3 +158,33 @@ describe("performance matrix", () => {
     expect(T.grade(40)).toBe("D");
   });
 });
+
+describe("material control: only cost-sheet items unless an additional requisition is approved", () => {
+  it("blocks extra items/quantity on a PO, and allows them after a proposal head approves an additional requisition", async () => {
+    const { assertPoWithinRequisition, raiseAdditionalRequisition } = await import("@/lib/material");
+    const pe = await emp("9800000011"), sm = await emp("9800000006");
+    const po = await one(`select po.* from purchase_order po join work_order w on w.id=po.wo_id where po.status<>'CANCELLED' and w.status<>'CLOSED' order by po.po_no limit 1`);
+    expect(po).toBeTruthy();
+    await assertPoWithinRequisition(po.id, pool); // as drafted from the cost sheet: fine
+    const line = await one(`select * from po_line where po_id=$1 limit 1`, [po.id]);
+    // more quantity than the cost sheet
+    await pool.query(`update po_line set qty=qty*2 where id=$1`, [line.id]);
+    await expect(assertPoWithinRequisition(po.id, pool)).rejects.toThrow(/allow/);
+    await pool.query(`update po_line set qty=$2 where id=$1`, [line.id, line.qty]);
+    // an item that is not on the cost sheet
+    const extra = await one(`insert into po_line(po_id, description, qty, uom, rate) values ($1,'Unlisted gasket kit',4,'NOS',500) returning id`, [po.id]);
+    await expect(assertPoWithinRequisition(po.id, pool)).rejects.toThrow(/not on this project's cost sheet/);
+    await pool.query(`delete from po_line where id=$1`, [extra.id]);
+    // additional requisition: needs a reason, goes to the proposal head; purchase cannot approve it
+    await expect(raiseAdditionalRequisition(po.wo_id, { reason: "", lines: [{ description: "Unlisted gasket kit", qty: 4, uom: "NOS" }] }, pe.id)).rejects.toThrow(/reason/);
+    const pr = await raiseAdditionalRequisition(po.wo_id, { reason: "Client asked for spare gaskets", lines: [{ description: "Unlisted gasket kit", qty: 4, uom: "NOS", budgetRate: 500 }] }, pe.id);
+    expect(pr.status).toBe("PENDING_APPROVAL");
+    const a = await one(`select * from approval where entity='purchase_requisition' and entity_id=$1`, [pr.id]);
+    await expect(decideApproval(a.id, true, "", { id: pe.id, roleCode: "PURCHASE_MANAGER" })).rejects.toThrow(/SALES_MANAGER/);
+    await decideApproval(a.id, true, "ok", { id: sm.id, roleCode: "SALES_MANAGER" });
+    expect((await one(`select status from purchase_requisition where id=$1`, [pr.id])).status).toBe("PO_RAISED");
+    const newPo = await one(`select * from purchase_order where pr_id=$1`, [pr.id]);
+    expect(newPo.status).toBe("DRAFT");
+    await assertPoWithinRequisition(newPo.id, pool); // now allowed
+  });
+});

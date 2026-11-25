@@ -38,10 +38,11 @@ describe("RBAC default matrix", () => {
     for (const r of ["PURCHASE_MANAGER", "ACCOUNTS_MANAGER", "FACTORY_WORKER"]) expect(scopeOf(expandMatrix(r), "leads", "view")).toBeNull();
     expect(maxScope("own", "team")).toBe("team");
   });
-  it("field employees only get attendance, tasks and their own expense claims", () => {
-    for (const r of ["SITE_ENGINEER", "OM_TECHNICIAN", "IC_ENGINEER"]) {
+  it("field employees only get attendance, tasks, their own expense claims and their own I&C / O&M site work", () => {
+    for (const r of ["SITE_ENGINEER", "OM_TECHNICIAN", "OM_OPERATOR", "IC_ENGINEER"]) {
       const p = expandMatrix(r);
-      expect(Object.keys(p).map((k) => k.split(":")[0]).sort().filter((v, i, a) => a.indexOf(v) === i)).toEqual(["attendance", "hr", "office_admin", "tasks"]);
+      expect(Object.keys(p).map((k) => k.split(":")[0]).sort().filter((v, i, a) => a.indexOf(v) === i)).toEqual(["attendance", "field_services", "hr", "office_admin", "tasks"]);
+      expect(scopeOf(p, "field_services", "view")).toBe("own");
       expect(scopeOf(p, "work_orders", "view")).toBeNull();
     }
   });

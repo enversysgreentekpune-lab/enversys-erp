@@ -6,6 +6,7 @@ import { inr, num, pct, dt, label } from "@/lib/format";
 import { salesKpis, pipeline, funnel, lossReasons, byDimension, leaderboard, woPortfolio, finance, monthlyTrend, adminVsBudget, hrSnapshot, attendanceRange, mdAlerts, topOpportunities } from "@/lib/queries";
 import { PageHeader, Card, Stat, Badge, Table, Tabs, Progress, Empty, KpiLine } from "@/components/ui";
 import { directorLines } from "@/lib/queries";
+import { omDashboard } from "@/lib/om";
 import { JOB_CATEGORIES } from "@/lib/workflow";
 import { FrameBar } from "@/components/FrameBar";
 import { Bars, Donut, Trend, Funnel } from "@/components/charts";
@@ -310,30 +311,55 @@ async function Finance({ range, fin, money }: any) {
 
 async function DirectorLines({ range, fyFrom, f, money }: { range: any; fyFrom: string; f: any; money: (v: number) => string }) {
   const { l1, l2, l3, l4, l5, l6 } = await directorLines(range, fyFrom, f);
+  const [ic, om] = await Promise.all([
+    one(`select count(*)::int total, count(*) filter (where status='NOT_STARTED')::int not_started, count(*) filter (where status='IN_PROGRESS')::int wip,
+        count(*) filter (where status='HANDOVER_PENDING')::int handover, count(*) filter (where status='COMPLETED')::int done,
+        count(*) filter (where status<>'COMPLETED' and target_date < current_date)::int late from ic_project`),
+    omDashboard(null, todayIST()),
+  ]);
   const actual = Number(l5.material) + Number(l5.consumables) + Number(l5.manpower) + Number(l5.electricity) + Number(l5.factory_other);
   const cat = (c: string) => l6.find((x: any) => x.category === c) ?? { done: 0, wip: 0, pending: 0 };
   return (
     <div className="space-y-3">
-      <KpiLine title="Sales" cols={5}>
-        <Stat label="Active customers" value={l1.active_customers} href="/customers" />
-        <Stat label="Active leads" value={l1.active_leads} href="/leads?open=1" />
-        <Stat label="Won leads" value={l1.won_leads} sub={range.label} href="/leads?stage=WON" />
-        <Stat label="Won PO amount" value={money(l1.won_amount)} sub={range.label} href="/work-orders" />
-        <Stat label="Won PO — year to date" value={money(l1.won_ytd)} sub="FY till today" />
+      <KpiLine title="Sales" cols={4}>
+        <Stat label="Total leads" value={l1.total_leads} sub={range.label} href="/leads" />
+        <Stat label="Active leads" value={l1.active_leads} sub="open today" href="/leads?open=1" />
+        <Stat label="Total win leads" value={l1.won_leads} sub={range.label} href="/leads?stage=WON" />
+        <Stat label="Win lead amount (PO + SO + WO)" value={money(l1.won_amount)} sub={`PO ${money(l1.won_po)} · SO ${money(l1.won_so)} · WO ${money(l1.won_wo)}`} href="/work-orders" />
       </KpiLine>
-      <KpiLine title="Orders">
-        <Stat label="Total POs" value={l2.po_total} sub={money(l2.po_value)} href="/work-orders" />
-        <Stat label="POs completed" value={l2.po_done} tone="green" />
-        <Stat label="POs ongoing" value={l2.po_ongoing} />
-        <Stat label="Total SOs" value={l2.so_total} sub={money(l2.so_value)} href="/so" />
-        <Stat label="SOs completed" value={l2.so_done} tone="green" />
-        <Stat label="SOs ongoing" value={l2.so_ongoing} />
-      </KpiLine>
+      {([["PO", "Purchase orders (PO)", "POs", "/work-orders"], ["SUPPLY", "Supply orders (SO)", "Supply Orders", "/work-orders"], ["WO", "Work orders (WO)", "Work Orders", "/so"]] as const).map(([cls, title, n, href]) => {
+        const o: any = l2.find((x: any) => x.cls === cls) ?? { total: 0, done: 0, ongoing: 0, value: 0, received: 0, due: 0, unbilled: 0 };
+        return (
+          <KpiLine key={cls} title={title} cols={5}>
+            <Stat label={`Total ${n}`} value={o.total} sub={`order value ${money(o.value)}`} href={href} />
+            <Stat label={`Completed ${n}`} value={o.done} tone="green" />
+            <Stat label={`Ongoing ${n}`} value={o.ongoing} />
+            <Stat label="Received amount" value={money(o.received)} tone="green" sub="incl. GST" href="/accounts" />
+            <Stat label="Due amount" value={money(o.due)} tone={Number(o.due) > 0 ? "amber" : undefined} sub={`billed, not received · ${money(o.unbilled)} yet to bill`} href="/accounts" />
+          </KpiLine>
+        );
+      })}
       <KpiLine title="Procurement" cols={4}>
         <Stat label="Procurement POs raised" value={money(l3.raised)} sub={`${l3.raised_n} POs · ${range.label}`} href="/purchase" />
         <Stat label="Payment done" value={money(l3.paid)} tone="green" href="/purchase?tab=bills" />
         <Stat label="Due payment" value={money(l3.due)} tone={Number(l3.due) > 0 ? "amber" : undefined} href="/purchase?tab=bills" />
         <Stat label="Delayed POs" value={l3.delayed} tone={l3.delayed ? "red" : undefined} href="/store?tab=delayed" />
+      </KpiLine>
+      <KpiLine title="Installation & commissioning" cols={6}>
+        <Stat label="Projects in I&C" value={ic!.total} sub="dispatched projects" href="/ic" />
+        <Stat label="Not started" value={ic!.not_started} href="/ic?status=NOT_STARTED" />
+        <Stat label="In progress" value={ic!.wip} tone={ic!.wip ? "amber" : undefined} href="/ic?status=IN_PROGRESS" />
+        <Stat label="Handover pending" value={ic!.handover} sub="awaiting signed certificates" href="/ic?status=HANDOVER_PENDING" />
+        <Stat label="Completed (handed over)" value={ic!.done} tone="green" href="/ic?status=COMPLETED" />
+        <Stat label="Past target date" value={ic!.late} tone={ic!.late ? "red" : undefined} href="/ic" />
+      </KpiLine>
+      <KpiLine title="O&M sites" cols={6}>
+        <Stat label="Total sites" value={om.totals.sites} href="/om" />
+        <Stat label="Present manpower" value={`${om.totals.present} / ${om.totals.required}`} sub="today" tone={om.totals.present < om.totals.required ? "amber" : "green"} href="/om" />
+        <Stat label="Sites with manpower issues" value={om.totals.manpowerIssues} tone={om.totals.manpowerIssues ? "red" : "green"} href="/om" />
+        <Stat label="Sites with operation issues" value={om.totals.operationIssues} tone={om.totals.operationIssues ? "red" : "green"} href="/om" />
+        <Stat label="Open tickets" value={om.tickets.open} sub={`operator ${om.tickets.by_operator} · client ${om.tickets.by_client} total`} tone={om.tickets.open ? "amber" : undefined} href="/om?tab=tickets&status=OPEN" />
+        <Stat label="Water treated (month)" value={`${Math.round(om.totals.waterMonth).toLocaleString("en-IN")} m³`} sub={`${om.tickets.closed} tickets closed`} href="/om" />
       </KpiLine>
       <KpiLine title="People & admin" cols={4}>
         <Stat label="Total employees" value={l4.total} href="/employees" />
@@ -341,13 +367,13 @@ async function DirectorLines({ range, fyFrom, f, money }: { range: any; fyFrom: 
         <Stat label="Employee expenses (month)" value={money(l4.emp_exp_month)} href="/expenses" />
         <Stat label="Admin expenses" value={money(l4.admin)} sub={`office ${money(l4.office)} · factory ${money(l4.factory)}`} href="/expenses" />
       </KpiLine>
-      <KpiLine title="Manufacturing cost">
-        <Stat label="Manufactured value (cost sheet)" value={money(l5.budget)} sub={`${l5.jobs} jobs`} href="/manufacturing" />
+      <KpiLine title="Manufacturing cost" cols={6}>
+        <Stat label="Jobs" value={l5.jobs} href="/manufacturing" />
         <Stat label="Material" value={money(l5.material)} />
         <Stat label="Manpower" value={money(l5.manpower)} />
         <Stat label="Electricity" value={money(l5.electricity)} />
         <Stat label="Consumables" value={money(l5.consumables)} sub="rods, wheels, PPE, paint" />
-        <Stat label="Total actual vs cost sheet" value={money(actual)} sub={`${Number(l5.budget) ? Math.round((actual / Number(l5.budget)) * 100) : 0}% of cost sheet`} tone={actual > Number(l5.budget) ? "red" : "green"} />
+        <Stat label="Total manufacturing cost" value={money(actual)} sub="material + manpower + electricity + consumables + site admin" href="/manufacturing?tab=jobs" />
       </KpiLine>
       <KpiLine title="Jobs" cols={5}>
         {JOB_CATEGORIES.map(([c, n]) => (

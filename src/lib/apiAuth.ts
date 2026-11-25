@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { getCurrentUser, can, Forbidden, type CurrentUser } from "./auth";
 import { one } from "./db";
 import { loadLead, loadWo } from "./access";
+import { BizError } from "./workflow";
 
 export async function apiUser(): Promise<CurrentUser | NextResponse> {
   const u = await getCurrentUser();
@@ -26,10 +27,20 @@ export async function canReadAttachment(u: CurrentUser, a: { entity: string; ent
         if (ce.cost_centre === "WO") { await loadWo(u, ce.wo_id); return true; }
         return !!can(u, ce.cost_centre === "FACTORY_ADMIN" ? "factory_admin" : "office_admin", "view") && can(u, ce.cost_centre === "FACTORY_ADMIN" ? "factory_admin" : "office_admin", "view") !== "own";
       }
+      case "ic_project": case "ic_update": return !!can(u, "field_services", "view") || !!can(u, "inspection", "view");
+      case "om_site": case "om_ticket": case "om_report": {
+        if (!can(u, "field_services", "view")) return false;
+        const site = a.entity === "om_site" ? a.entity_id : (await one(`select site_id from ${a.entity === "om_ticket" ? "om_ticket" : "om_report"} where id=$1`, [a.entity_id]))?.site_id;
+        if (!site) return false;
+        const { assertSite } = await import("./om");
+        await assertSite(u, site); return true;
+      }
+      case "dispatch": return !!can(u, "inspection", "view");
+      case "grn": case "vendor_bill": return !!can(u, "stores", "view") || !!can(u, "purchase", "view") || !!can(u, "finance", "view");
       default: return !!can(u, "settings", "view");
     }
   } catch (e) {
-    if (e instanceof Forbidden || (e as any)?.digest?.includes?.("NEXT_HTTP_ERROR_FALLBACK") || (e as any)?.digest?.includes?.("NEXT_NOT_FOUND")) return false;
+    if (e instanceof BizError || e instanceof Forbidden || (e as any)?.digest?.includes?.("NEXT_HTTP_ERROR_FALLBACK") || (e as any)?.digest?.includes?.("NEXT_NOT_FOUND")) return false;
     throw e;
   }
 }

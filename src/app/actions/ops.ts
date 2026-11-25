@@ -215,3 +215,19 @@ export async function assignProposalAction(_: any, fd: FormData) {
     return { ok: true, message: `Assigned to ${to.name}` };
   });
 }
+
+export async function additionalRequisitionAction(_: any, fd: FormData) {
+  const u = await requireUser();
+  return safe(async () => {
+    if (!can(u, "purchase", "create")) throw new BizError("Only the Purchase department can raise an additional material requisition");
+    const woId = s(fd, "wo_id");
+    const desc = fd.getAll("description").map(String), code = fd.getAll("item_code").map(String), qty = fd.getAll("qty").map(Number), uom = fd.getAll("uom").map(String), rate = fd.getAll("rate").map(Number);
+    const { raiseAdditionalRequisition } = await import("@/lib/material");
+    const pr = await raiseAdditionalRequisition(woId, {
+      reason: s(fd, "reason"), requiredBy: opt(fd, "required_by") ?? undefined,
+      lines: desc.map((d, i) => ({ description: d, itemCode: code[i] || null, qty: qty[i] || 0, uom: uom[i] || "NOS", budgetRate: rate[i] || 0 })),
+    }, u.id);
+    revalidatePath("/dispatch"); revalidatePath("/approvals");
+    return { ok: true, message: `${pr.pr_no} sent to the proposal head for approval` };
+  });
+}

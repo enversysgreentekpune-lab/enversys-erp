@@ -237,3 +237,16 @@ export async function seedPeopleOps(E: any, loc: any, wos: any[], C: any[], lead
   }
   void leads;
 }
+
+/** Additional material requisitions: one approved (draft PO raised), one awaiting the proposal head */
+export async function seedRequisitions(E: any) {
+  const { raiseAdditionalRequisition } = await import("../src/lib/material");
+  const wos = await q(`select id, wo_no from work_order where order_class in ('PO','SUPPLY') and status not in ('CLOSED','COMPLETED','CANCELLED') and exists (select 1 from purchase_order p where p.wo_id=work_order.id) order by wo_no limit 2`);
+  if (!wos.length) return;
+  const a = await raiseAdditionalRequisition(wos[0].id, { reason: "Client asked for additional inlet valve after site visit (drawing R2)",
+    lines: [{ description: "Butterfly valve DN150 PN10, CI body", qty: 2, uom: "NOS", budgetRate: 14500 }, { description: "SS 304 flange DN150", qty: 4, uom: "NOS", budgetRate: 2200 }] }, E.pe.id);
+  const ap = await one(`select id from approval where entity='purchase_requisition' and entity_id=$1`, [a.id]);
+  await decideApproval(ap.id, true, "Approved — billable to client as variation", { id: E.sm.id, roleCode: "SALES_MANAGER" });
+  await raiseAdditionalRequisition((wos[1] ?? wos[0]).id, { reason: "Extra MS angle for skid base stiffening after load check",
+    lines: [{ description: "MS angle 65x65x6", qty: 0.4, uom: "MT", budgetRate: 68000 }] }, E.pe.id);
+}

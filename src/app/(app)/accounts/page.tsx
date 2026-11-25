@@ -37,7 +37,7 @@ export default async function Accounts({ searchParams }: { searchParams: Promise
       <Tabs tabs={tabs} active={tab} base="/accounts" />
       {tab === "projects" && (
         <>
-          <div className="mb-3 flex gap-2 text-sm">{[["", "All"], ["PO", "Projects (PO)"], ["SO", "Service orders (SO)"]].map(([k, l]) => <Link key={k} href={k ? `/accounts?kind=${k}` : "/accounts"} className={`rounded-full border px-3 py-1 ${(sp.kind ?? "") === k ? "border-brand-600 bg-brand-50 text-brand-700" : "border-slate-200 text-slate-600"}`}>{l}</Link>)}</div>
+          <div className="mb-3 flex gap-2 text-sm">{[["", "All"], ["PO", "Projects (PO & Supply)"], ["SO", "Work orders (WO)"]].map(([k, l]) => <Link key={k} href={k ? `/accounts?kind=${k}` : "/accounts"} className={`rounded-full border px-3 py-1 ${(sp.kind ?? "") === k ? "border-brand-600 bg-brand-50 text-brand-700" : "border-slate-200 text-slate-600"}`}>{l}</Link>)}</div>
           <Card bodyClass="p-0">
             <Table head={["Project code", "Type", "Client", "Order value", "Billed", "Unbilled", "GST billed", "GST received", "GST not received", "Received", "Outstanding"]}>
               {projects.map((p) => (

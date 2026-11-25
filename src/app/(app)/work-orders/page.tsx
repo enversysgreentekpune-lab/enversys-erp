@@ -21,7 +21,7 @@ export default async function WorkOrders({ searchParams }: { searchParams: Promi
   const money = fin || !!can(u, "work_orders", "edit");
   return (
     <div>
-      <PageHeader title="Projects (PO)" subtitle="Supply, EPC, manufacturing and trading orders. The project code is the master cost centre; service orders are under SO." actions={<a className="btn-secondary" href="/api/export/work-orders">Export Excel</a>} />
+      <PageHeader title="Projects (PO & Supply)" subtitle="Purchase orders (EPC projects) and supply orders (manufacturing, trading). The project code is the master cost centre; service work orders are under WO." actions={<a className="btn-secondary" href="/api/export/work-orders">Export Excel</a>} />
       <form className="card mb-4 flex flex-wrap gap-2 p-3">
         <input name="q" defaultValue={sp.q} placeholder="Search WO, title, customer" className="input max-w-xs" />
         <select name="type" defaultValue={sp.type ?? ""} className="input w-44"><option value="">All types</option>{WO_TYPES.map((t) => <option key={t} value={t}>{label(t)}</option>)}</select>

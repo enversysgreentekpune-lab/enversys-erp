@@ -6,6 +6,7 @@ import { nextNo } from "./numbering";
 import { audit } from "./audit";
 import { notify, idsByRole, createTask } from "./notify";
 import { computeCostSheet, DEFAULT_PARAMS, type CostParams } from "./costing";
+import { assertPoWithinRequisition, onRequisitionDecision } from "./material";
 
 export const LEAD_STAGES = [
   { code: "NEW", label: "New", prob: 5 }, { code: "QUALIFIED", label: "Qualified", prob: 10 },
@@ -203,6 +204,7 @@ export async function decideApproval(approvalId: string, approve: boolean, remar
           values ('WO',$1,'MATERIAL',$2,$3,$4,'PURCHASE_ORDER',$5,$6,'COMMITTED',$7)`, [po.wo_id, `PO ${po.po_no}`, po.total, po.gst_total, po.id, po.vendor_id, actor.id]);
       }
     }
+    if (a.entity === "purchase_requisition") await onRequisitionDecision(a.entity_id, approve, actor.id, remarks, c);
     if (a.entity === "cost_entry") {
       const ce = await one(`select * from cost_entry where id=$1`, [a.entity_id], c);
       if (approve && a.step === 1) {
@@ -373,6 +375,7 @@ export async function submitPoForApproval(poId: string, actorId: string) {
     const po = await one(`select * from purchase_order where id=$1 for update`, [poId], c);
     if (!po || po.status !== "DRAFT") throw new BizError("Only draft POs can be submitted");
     if (!po.vendor_id) throw new BizError("Select a vendor first");
+    await assertPoWithinRequisition(poId, c);
     const role = await requiredApproverRole("PURCHASE_ORDER", Number(po.total), c);
     await c.query(`insert into approval(entity, entity_id, doc_type, approver_role, requested_by, value) values ('purchase_order',$1,'PURCHASE_ORDER',$2,$3,$4)`, [poId, role, actorId, po.total]);
     await c.query(`update purchase_order set status='PENDING_APPROVAL' where id=$1`, [poId]);

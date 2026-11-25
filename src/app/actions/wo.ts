@@ -8,6 +8,7 @@ import { BizError, submitPoForApproval } from "@/lib/workflow";
 import { loadWo } from "@/lib/access";
 import { saveUploads } from "@/lib/attachments";
 import { notify } from "@/lib/notify";
+import { assertPoWithinRequisition } from "@/lib/material";
 
 export async function assignTeamAction(_: any, fd: FormData) {
   const u = await requireUser();
@@ -35,6 +36,10 @@ export async function progressAction(_: any, fd: FormData) {
     const wo = await loadWo(u, s(fd, "id"), "edit");
     const pctv = n(fd, "pct");
     if (pctv < 0 || pctv > 100) throw new BizError("Progress must be 0–100");
+    if (["COMPLETED", "CLOSED"].includes(s(fd, "status")) && !["COMPLETED", "CLOSED"].includes(wo.status)) {
+      const ic = await one(`select status from ic_project where wo_id=$1`, [wo.id]);
+      if (ic && ic.status !== "COMPLETED") throw new BizError("This project is completed only when the signed handover and appreciation certificates are uploaded in I&C");
+    }
     await pool.query(`update work_order set pct_complete=$2, status=$3, end_date=coalesce($4, end_date) where id=$1`, [wo.id, pctv, s(fd, "status"), opt(fd, "end_date")]);
     await audit(u.id, "PROGRESS", "work_order", wo.id, { pct: wo.pct_complete, status: wo.status }, { pct: pctv, status: s(fd, "status") });
     revalidatePath(`/work-orders/${wo.id}`);
@@ -107,6 +112,7 @@ export async function savePoAction(_: any, fd: FormData) {
         total += qty[i] * rate[i]; gstT += (qty[i] * rate[i] * gst[i]) / 100;
       }
       await c.query(`update purchase_order set vendor_id=$2, delivery_date=$3, terms=$4, total=$5, gst_total=$6 where id=$1`, [po.id, opt(fd, "vendor_id"), opt(fd, "delivery_date"), s(fd, "terms"), Math.round(total * 100) / 100, Math.round(gstT * 100) / 100]);
+      await assertPoWithinRequisition(po.id, c);
       await audit(u.id, "EDIT", "purchase_order", po.id, { total: po.total, vendor: po.vendor_id }, { total, vendor: opt(fd, "vendor_id") }, c);
     });
     revalidatePath(`/purchase/${po.id}`);
